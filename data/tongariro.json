@@ -1,1 +1,33 @@
+{
+  "id": "tongariro",
+  "name": "汤加里罗越山穿越 Tongariro Alpine Crossing",
+  "country": "New Zealand",
+  "region": "North Island",
+  "length_km": 19.4,
+  "difficulty": "Moderate-Hard",
+  "estimated_time_hours": 6.5,
+  "elevation_gain_m": 765,
+  "elevation_loss_m": 1125,
+
+  "trail_type": "Point-to-point",
+  "season_best": "10月–4月 (南半球春夏季)",
+  "permit": "无强制许可，但需关注火山活动预警",
+
+  "highlights": [
+    "红火山 Red Crater",
+    "翡翠湖 Emerald Lakes",
+    "蓝湖 Blue Lake",
+    "活火山地貌",
+    "月球表面般的荒原"
+  ],
+
+  "gps_track_url": "",
+  "map_center": { "lat": -39.144, "lng": 175.634 },
+
+  "suggestions": {
+    "start_time": "早上7点以前出发",
+    "water_liters": 2,
+    "wind_warning": "此路线极易受强风影响，必须关注天气预报"
+  }
+}
 
