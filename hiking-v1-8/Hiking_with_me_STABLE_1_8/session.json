@@ -1,0 +1,104 @@
+{
+  "_comment": "Altourdoer SessionRecord v1.1 —— 本地唯一活跃行走记录，支持反穿/折返/改线/多路线",
+  "schema": {
+    "name": "Altourdoer.SessionRecord",
+    "version": "1.1.0",
+    "createdAt": "2025-12-22T21:14:24.061241Z",
+    "_desc": "结构定义与版本控制，服务端可据此区分规则差异"
+  },
+  "lifecycle": {
+    "_desc": "本地文件生命周期控制，防止误覆盖",
+    "isActive": true,
+    "canOverwrite": false,
+    "lastSavedAt": null
+  },
+  "routeCatalog": {
+    "_desc": "本次行走可用的路线集合（主线 + 已下载备用线）",
+    "routes": []
+  },
+  "routeBindings": [
+    {
+      "_desc": "一次路线绑定片段（方向 + 距离解释区间）",
+      "bindIndex": 0,
+      "routeId": null,
+      "trackHash": null,
+      "direction": "FORWARD",
+      "_directionEnum": [
+        "FORWARD",
+        "REVERSE"
+      ],
+      "startTs": null,
+      "endTs": null,
+      "startDistKm": 0.0,
+      "endDistKm": null,
+      "reason": "initial",
+      "_reasonEnum": [
+        "initial",
+        "user_switch",
+        "user_reverse",
+        "user_turn_back",
+        "auto_match"
+      ]
+    }
+  ],
+  "policies": {
+    "_desc": "本次 Session 采用的所有规则（规则本身也是数据）",
+    "startPolicy": {
+      "autoActivate": true,
+      "activateMinForwardM": 100
+    },
+    "samplingPolicy": {
+      "timeIntervalSec": 30,
+      "distanceIntervalM": 30,
+      "maxPoints": 20000
+    },
+    "pausePolicy": {
+      "enabled": true,
+      "enterPauseMinNoMoveSec": 90,
+      "enterPauseMaxMoveM": 10,
+      "exitPauseMinMoveM": 20,
+      "minSpeedKmhToExit": 0.5
+    },
+    "stopPolicy": {
+      "autoFinishAtEnd": true,
+      "finishRadiusM": 30
+    }
+  },
+  "timeline": {
+    "_desc": "所有时间计算的唯一可信来源",
+    "state": "PREPARE",
+    "_stateEnum": [
+      "PREPARE",
+      "MOVING",
+      "PAUSE",
+      "DEVIATE",
+      "FINISHED"
+    ],
+    "activatedAtTs": null,
+    "startTs": null,
+    "endTs": null,
+    "elapsedSec": 0,
+    "pausedSec": 0,
+    "movingSec": 0,
+    "plannedSec": 0,
+    "timeDeviationSec": 0
+  },
+  "trackPoints": [],
+  "pauseSegments": [],
+  "summary": {
+    "_desc": "Session 结束后生成的统计（可重算，不是原始事实）",
+    "distanceKm": 0.0,
+    "maxSpeedKmh": 0.0,
+    "avgMovingSpeedKmh": 0.0,
+    "minPaceSecPerKm": null,
+    "finishReached": false,
+    "offRouteCount": 0,
+    "maxOffRouteM": 0.0
+  },
+  "extensions": {
+    "_desc": "二期及以后扩展字段（一期不参与计算）",
+    "weather": null,
+    "strategyHits": [],
+    "userNotes": []
+  }
+}

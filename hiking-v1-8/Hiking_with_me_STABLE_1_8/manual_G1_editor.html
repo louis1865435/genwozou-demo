@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>路线人工编辑器（G1 地形 + 场景节点 + 天气增强版）</title>
+
+<!-- Leaflet 地图样式与脚本 -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  padding: 10px 20px 40px;
+  background: #f5f5f5;
+}
+h1 {
+  margin-bottom: 10px;
+}
+.box {
+  background: white;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  margin-bottom: 16px;
+}
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.top-bar input[type="file"] {
+  max-width: 260px;
+}
+button {
+  padding: 6px 12px;
+  background: #007bff;
+  color: white;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+}
+button:hover { background: #005fcc; }
+button.secondary { background: #6c757d; }
+button.secondary:hover { background: #5a6268; }
+button.danger { background: #d9534f; }
+button.danger:hover { background: #c9302c; }
+button.success { background: #28a745; }
+button.success:hover { background: #218838; }
+
+#loadStatus { margin-left: 8px; }
+
+/* Tabs */
+.tab-header {
+  display: flex;
+  border-bottom: 2px solid #007bff33;
+  margin-bottom: 10px;
+}
+.tab-header button {
+  padding: 10px 18px;
+  border-radius: 6px 6px 0 0;
+  background: #e9ecef;
+  border: none;
+  margin-right: 6px;
+  font-weight: bold;
+  color: #333;
+}
+.tab-header button.active {
+  background: #ffffff;
+  border-bottom: 2px solid #007bff;
+  color: #007bff;      /* ★ 修复 Tab 字体看不见 */
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  font-size: 13px;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: #eee;
+}
+input[type="text"], textarea, input[type="number"] {
+  width: 100%;
+  padding: 4px;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+textarea {
+  resize: vertical;
+}
+
+/* 地图弹窗 */
+#mapModal {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(2px);
+}
+#mapContainer {
+  width: 80%;
+  height: 80%;
+  margin: 4% auto;
+  background: white;
+  border-radius: 8px;
+  position: relative;
+  overflow: visible;   /* ★ 关键修复：不再裁剪 Leaflet */
+  box-shadow: 0 0 20px rgba(0,0,0,0.3);
+}
+#mapToolbar {
+  position: absolute;
+  z-index: 10000;
+  left: 0; right: 0;
+  background: white;
+  padding: 6px;
+  border-bottom: 1px solid #ccc;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#mapToolbar select,
+#mapToolbar input[type="text"] {
+  padding: 4px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+#map {
+  position: absolute;
+  top: 42px;            /* ★ toolbar 高度 */
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+</style>
+</head>
+
+<body>
+<h1>路线人工录入编辑器（G1 地形 + 场景节点 + 天气增强版）</h1>
+
+<!-- 顶部操作栏 -->
+<div class="box">
+  <div class="top-bar">
+    <input type="file" id="jsonInput" accept=".json">
+    <button onclick="loadJSON()">加载 JSON</button>
+
+    <button class="success" onclick="saveDraft()">保存草稿</button>
+    <button class="secondary" onclick="clearDraft()">清除草稿</button>
+
+    <!-- ⭐ 只保留一个生成节点表按钮 -->
+    <button onclick="exportNodeModel()">生成节点表（Node Model JSON）</button>
+
+    <span id="loadStatus"></span>
+  </div>
+</div>
+
+<!-- ★ 三个 Tab：人工 → 天气 → 地形 -->
+<div class="tab-header">
+  <button id="tabBtnScenes" class="active" onclick="switchTab('scenes')">人工节点</button>
+  <button id="tabBtnWeather" onclick="switchTab('weather')">天气节点</button>
+  <button id="tabBtnSegments" onclick="switchTab('segments')">地形节点</button>
+</div>
+
+<!-- TAB ①：人工节点（默认） -->
+<div id="tabScenes" class="tab-content active">
+  <h3>人工场景节点（手工维护，可地图拾取坐标）</h3>
+  <button onclick="addManualScene()">新增节点</button>
+  <br><br>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>类别</th>
+        <th>标题（简称）</th>
+        <th>副标题（描述）</th>
+        <th>里程区间</th>
+        <th>海拔区间</th>
+        <th>起点（地图链接）</th>
+        <th>终点（地图链接）</th>
+        <th>搜索标签</th>
+        <th>数据</th>
+        <th>媒体</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+
+    <tbody id="mscTableBody"></tbody>
+  </table>
+</div>
+
+<!-- TAB ②：天气节点（只读） -->
+<div id="tabWeather" class="tab-content">
+  <h3>天气节点（只读 —— 来自 G1）</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>类别</th>
+        <th>标题（简称）</th>
+        <th>副标题（描述）</th>
+        <th>里程区间</th>
+        <th>海拔区间</th>
+        <th>起点（地图链接）</th>
+        <th>终点（地图链接）</th>
+        <th>搜索标签</th>
+        <th>数据</th>
+        <th>媒体</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+
+    <tbody id="weatherTableBody"></tbody>
+  </table>
+</div>
+
+<!-- TAB ③：地形自然分段 -->
+<div id="tabSegments" class="tab-content">
+  <h3>地形自然分段（系统自动 + 可人工修订）</h3>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>类别</th>
+        <th>标题（简称）</th>
+        <th>副标题（描述）</th>
+        <th>里程区间</th>
+        <th>海拔区间</th>
+        <th>起点（地图链接）</th>
+        <th>终点（地图链接）</th>
+        <th>搜索标签</th>
+        <th>数据</th>
+        <th>媒体</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+
+    <tbody id="segTableBody"></tbody>
+  </table>
+</div>
+
+<!-- 地图选择弹窗 -->
+<div id="mapModal">
+  <div id="mapContainer">
+
+    <div id="mapToolbar">
+      <select id="basemapSelect" onchange="switchBaseMap(this.value)">
+        <option value="topo">OpenTopoMap（默认地形）</option>
+        <option value="hikebike">HikeBike（徒步/骑行）</option>
+        <option value="osm">标准 OSM</option>
+      </select>
+
+      <input id="mapSearchBox" type="text" placeholder="搜索位置…" style="flex:1;">
+      <button onclick="searchLocation()">搜索</button>
+
+      <button class="success" onclick="confirmPoint()">确定</button>
+      <button class="danger" onclick="closeMap()">关闭</button>
+    </div>
+
+    <div id="map"></div>
+  </div>
+</div>
+
+<script>
+let G1_DATA = null;
+//-----------------------------------------------------
+// ★ 从 G1.html 写入的 localStorage 读取自然分段 JSON
+//-----------------------------------------------------
+(function () {
+    const raw = localStorage.getItem("G1_NATURAL_JSON");
+    if (raw) {
+        try {
+            G1_DATA = JSON.parse(raw);
+            console.log("📥 已成功载入自然分段 JSON：", G1_DATA);
+        } catch (err) {
+            console.error("❌ JSON 解析失败：", err);
+        }
+    } else {
+        console.warn("⚠ 未接收到自然分段 JSON，请检查 G1 页面是否执行了『生成自然分段』");
+    }
+})();
+
+/* ========== Tab 切换（修正版，加入 editor） ========== */
+function switchTab(which) {
+
+  // 全部隐藏
+  document.getElementById('tabScenes').classList.remove('active');
+  document.getElementById('tabWeather').classList.remove('active');
+  document.getElementById('tabSegments').classList.remove('active');
+
+  // 取消按钮激活状态
+  document.getElementById('tabBtnScenes').classList.remove('active');
+  document.getElementById('tabBtnWeather').classList.remove('active');
+  document.getElementById('tabBtnSegments').classList.remove('active');
+
+  // 打开对应 tab
+  if (which === 'scenes') {
+    document.getElementById('tabScenes').classList.add('active');
+    document.getElementById('tabBtnScenes').classList.add('active');
+  }
+  else if (which === 'weather') {
+    document.getElementById('tabWeather').classList.add('active');
+    document.getElementById('tabBtnWeather').classList.add('active');
+  }
+  else if (which === 'segments') {
+    document.getElementById('tabSegments').classList.add('active');
+    document.getElementById('tabBtnSegments').classList.add('active');
+  }
+}
+
+function receiveFromG1(data) {
+  localStorage.setItem("G1_FROM_ANALYZER", JSON.stringify(data));
+}
+
+/* ========== 加载 JSON ========== */
+function loadJSON() {
+  const file = document.getElementById("jsonInput").files[0];
+  if (!file) return alert("请选择 JSON 文件");
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      G1_DATA = JSON.parse(e.target.result);
+      initDataAfterLoad();
+      document.getElementById("loadStatus").innerHTML =
+        "<span style='color:green'>✔ JSON 加载成功</span>";
+    } catch (err) {
+      console.error(err);
+      alert("JSON 格式错误，请检查！");
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ========== 初始化 & 渲染入口 ========== */
+function initDataAfterLoad() {
+  /* ============================================================
+   ★★ STEP 1：兼容 G1 页面导入的 JSON 字段（最关键的统合层）
+   ============================================================ */
+
+// ⭐ 地形段：naturalSegments → segments
+if (!Array.isArray(G1_DATA.segments) && Array.isArray(G1_DATA.naturalSegments)) {
+    console.log("⚡ 兼容字段：naturalSegments → segments");
+    G1_DATA.segments = G1_DATA.naturalSegments;
+}
+
+// ⭐ 天气节点：weather → weatherNodes
+if (!Array.isArray(G1_DATA.weatherNodes) && Array.isArray(G1_DATA.weather)) {
+    console.log("⚡ 兼容字段：weather → weatherNodes");
+    G1_DATA.weatherNodes = G1_DATA.weather;
+}
+
+// ⭐ 轨迹：track → profile（G1 内叫 track，但编辑器用 profile）
+if (!Array.isArray(G1_DATA.profile) && Array.isArray(G1_DATA.track)) {
+    console.log("⚡ 兼容字段：track → profile");
+    G1_DATA.profile = G1_DATA.track;
+}
+
+// ⭐ 人工节点为空但存在 manualScenes，也要确保结构正确
+if (!Array.isArray(G1_DATA.manualScenes)) {
+    G1_DATA.manualScenes = [];
+}
+
+  // 🔥 加在这里！用于检查天气字段到底叫什么
+  console.log("👉 天气字段检查：", {
+    weatherNodes: G1_DATA?.weatherNodes,
+    weather: G1_DATA?.weather,
+    weatherList: G1_DATA?.weatherList
+  });
+  console.log("👉 地形字段检查：", {
+  segments: G1_DATA?.segments,
+  terrainList: G1_DATA?.terrainList,
+  terrain: G1_DATA?.terrain
+});
+
+
+  if (!G1_DATA) return;
+
+  if (!Array.isArray(G1_DATA.segments)) G1_DATA.segments = [];
+  if (!Array.isArray(G1_DATA.weatherNodes)) G1_DATA.weatherNodes = [];
+  if (!Array.isArray(G1_DATA.manualScenes)) G1_DATA.manualScenes = [];
+
+  // 地形段默认标题 / 副标题
+  G1_DATA.segments.forEach(seg => {
+    if (!seg.title) seg.title = seg.type || "";
+    if (!seg.subtitle) seg.subtitle = seg.desc || "";
+  });
+
+  renderWeather();
+  renderSegments();
+ renderManualScenes();
+// ⭐ 如果地图已经存在，则根据新的 profile 重画轨迹
+if (map) {
+  drawRouteProfile();
+}
+}   // ← ★★★ 这里必须有一个大括号关闭 initDataAfterLoad()
+
+
+/* 插入这里 */
+function syncSegmentsFromUI() {
+  if (!G1_DATA || !Array.isArray(G1_DATA.segments)) return;
+
+  G1_DATA.segments = G1_DATA.segments.map((seg, i) => ({
+    ...seg,
+    title:    document.getElementById(`title_${i}`)?.value || "",
+    subtitle: document.getElementById(`subtitle_${i}`)?.value || "",
+    tags:     document.getElementById(`seg_tags_${i}`)?.value || "",
+    data:     document.getElementById(`seg_data_${i}`)?.value || "",
+    media:    document.getElementById(`seg_media_${i}`)?.value || ""
+  }));
+}
+
+/* 插入结束 */
+
+
+/* ========== 小工具：在 profile 中根据 km 估算海拔 ========== */
+function getEleAtKm(km) {
+  if (!G1_DATA || !Array.isArray(G1_DATA.profile) || G1_DATA.profile.length === 0) {
+    return null;
+  }
+  const prof = G1_DATA.profile;
+  if (km <= prof[0].km) return prof[0].ele;
+  const last = prof[prof.length - 1];
+  if (km >= last.km) return last.ele;
+
+  for (let i = 1; i < prof.length; i++) {
+    const p0 = prof[i - 1];
+    const p1 = prof[i];
+    if (km <= p1.km) {
+      const span = p1.km - p0.km || 1;
+      const t = (km - p0.km) / span;
+      return Math.round(p0.ele + t * (p1.ele - p0.ele));
+    }
+  }
+  return null;
+}
+/* ========== 渲染天气表（结构完全对齐 G1 报告） ========== */
+function renderWeather() {
+  const body = document.getElementById("weatherTableBody");
+  body.innerHTML = "";
+  if (!G1_DATA || !Array.isArray(G1_DATA.weatherNodes)) return;
+
+  G1_DATA.weatherNodes.forEach((w, i) => {
+    const id = w.id || ("W" + (i + 1));
+
+    /* km 区间格式 */
+    let kmRange = "—";
+    if (typeof w.km === "number") {
+      const k = w.km.toFixed(2);
+      kmRange = `${k}–${k} km`;
+    } else if (typeof w.km === "string" && w.km.trim()) {
+      kmRange = w.km;
+    }
+
+    /* 海拔区间：如 w.ele 未提供，则从 G1 profile 中插值 */
+    let eleRange = "—";
+    let ele = null;
+    if (typeof w.ele === "number") {
+      ele = w.ele;
+      eleRange = `${ele}–${ele} m`;
+    } else if (typeof w.km === "number") {
+      ele = getEleAtKm(w.km);
+      if (typeof ele === "number") eleRange = `${ele}–${ele} m`;
+    }
+
+    /* ======== 标题（天气 + 温度区间） ======== */
+    const weatherType =
+      w.weather || w.wxShort || w.main || w.type || "";
+
+    let tempShort = "";
+    if (typeof w.tMin === "number" && typeof w.tMax === "number") {
+      tempShort = `${w.tMin}–${w.tMax}℃`;
+    } else if (w.temp) {
+      tempShort = w.temp;  // 兼容旧字段
+    }
+
+    /* ======== 副标题：简短 summary（体感最后） ======== */
+    let desc = w.summary || "";  // 若 G1 已给 summary，则直接用
+
+    if (!desc) {
+      const parts = [];
+
+      const midT =
+        (typeof w.tMin === "number" && typeof w.tMax === "number")
+          ? Math.round((w.tMin + w.tMax) / 2)
+          : (typeof w.midT === "number" ? w.midT : null);
+
+      if (weatherType) parts.push(weatherType);
+      if (midT !== null) parts.push(`${midT}°`);
+      if (typeof w.wind === "number") parts.push(`${w.wind}m/s`);
+      if (typeof w.pop === "number") parts.push(`${w.pop}%`);
+      if (typeof w.uv === "number") parts.push(`UV ${w.uv}`);
+      if (typeof w.feel === "number") parts.push(`体感 ${w.feel}°`);
+
+      desc = parts.join(" | ");
+    }
+
+    const lat = w.lat ?? "";
+    const lon = w.lon ?? "";
+
+    /* ======== 行渲染 ======== */
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+
+      <!-- 类别 -->
+      <td>天气</td>
+
+      <!-- 标题（天气 + 温度区间） -->
+      <td>${weatherType} ${tempShort}</td>
+
+      <!-- 副标题（简短描述：体感永远放最后） -->
+      <td>${desc}</td>
+
+      <!-- 里程区间 -->
+      <td>${kmRange}</td>
+
+      <!-- 海拔区间 -->
+      <td>${eleRange}</td>
+
+      <!-- 起点 -->
+      <td>
+        ${
+          lat && lon
+            ? `<a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=14"
+                 target="_blank">${lat}, ${lon}</a><br>`
+            : ""
+        }
+        <button onclick="openWeatherMap(${i}, 'start')">选起点</button>
+      </td>
+
+      <!-- 终点 -->
+      <td>
+        ${
+          lat && lon
+            ? `<a href="https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=14"
+                 target="_blank">${lat}, ${lon}</a><br>`
+            : ""
+        }
+        <button onclick="openWeatherMap(${i}, 'end')">选终点</button>
+      </td>
+
+      <td></td>
+      <td></td>
+      <td></td>
+
+      <td></td>
+    `;
+
+    body.appendChild(tr);
+  });
+}
+
+/* ========== 选择天气点地图定位 ========== */
+function openWeatherMap(i, pickType) {
+  MapPicker.open("weather", i, pickType, (action, data) => {
+    const w = G1_DATA.weatherNodes[i];
+
+    if (action === "getCurrentPoint") {
+      return { lat: w.lat, lon: w.lon };
+    }
+
+    if (action === "setPoint") {
+      w.lat = data.lat;
+      w.lon = data.lon;
+
+      renderWeather();
+    }
+  });
+}
+
+/* ========== 渲染地形自然分段 ========== */
+/* ========== 渲染地形自然分段（可新增 / 删除 / 编辑） ========== */
+function renderSegments() {
+  const body = document.getElementById("segTableBody");
+  body.innerHTML = "";
+
+  if (!G1_DATA || !Array.isArray(G1_DATA.segments)) return;
+
+  G1_DATA.segments.forEach((seg, i) => {
+    const s = seg.startPt || {};
+    const e = seg.endPt || {};
+
+    const startKm = seg.startKm?.toFixed ? seg.startKm.toFixed(2) : seg.startKm ?? "";
+    const endKm = seg.endKm?.toFixed ? seg.endKm.toFixed(2) : seg.endKm ?? "";
+    const kmRange = `${startKm} – ${endKm} km`;
+
+    const eleRange =
+      seg.startEle != null && seg.endEle != null
+        ? `${seg.startEle} – ${seg.endEle} m`
+        : "—";
+
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${seg.id ?? i + 1}</td>
+
+      <td>地形</td>
+
+      <td><input id="title_${i}" value="${seg.title ?? ""}"></td>
+
+      <td><textarea id="subtitle_${i}" rows="2">${seg.subtitle ?? ""}</textarea></td>
+
+      <td id="km_range_${i}">${kmRange}</td>
+
+      <td id="ele_range_${i}">${eleRange}</td>
+
+      <td>
+        ${
+          s.lat && s.lon
+            ? `<a href="https://www.openstreetmap.org/?mlat=${s.lat}&mlon=${s.lon}&zoom=14" target="_blank">${s.lat}, ${s.lon}</a><br>`
+            : ""
+        }
+        <button onclick="openSegmentMap(${i}, 'start')">选起点</button>
+      </td>
+
+      <td>
+        ${
+          e.lat && e.lon
+            ? `<a href="https://www.openstreetmap.org/?mlat=${e.lat}&mlon=${e.lon}&zoom=14" target="_blank">${e.lat}, ${e.lon}</a><br>`
+            : ""
+        }
+        <button onclick="openSegmentMap(${i}, 'end')">选终点</button>
+      </td>
+
+      <td><input id="seg_tags_${i}" value="${seg.tags || ""}"></td>
+
+      <td><textarea id="seg_data_${i}" rows="2">${seg.data || ""}</textarea></td>
+
+      <td><input id="seg_media_${i}" value="${seg.media || ""}"></td>
+
+      <td>
+        <button class="success" onclick="addSegmentAfter(${i})">＋</button>
+        <button class="danger" onclick="deleteSegment(${i})">删</button>
+      </td>
+    `;
+
+    body.appendChild(tr);
+  });
+}
+
+/* ========== 新增地形段（插入当前位置之后） ========== */
+function addSegmentAfter(i) {
+  const segs = G1_DATA.segments;
+
+  const curr = segs[i];
+  const next = segs[i + 1];
+
+  const midKm =
+    next && next.startKm != null
+      ? (curr.endKm + next.startKm) / 2
+      : curr.endKm + 0.1;
+
+  // 新段模板
+  const newSeg = {
+    id: "T" + (segs.length + 1),
+    type: curr.type,
+    title: curr.title,
+    subtitle: "",
+    startKm: midKm,
+    endKm: midKm + 0.05,
+    startPt: { lat: null, lon: null },
+    endPt: { lat: null, lon: null },
+    tags: "",
+    data: "",
+    media: ""
+  };
+
+  segs.splice(i + 1, 0, newSeg);
+
+  renderSegments();
+}
+
+
+/* ========== 删除地形段 ========== */
+function deleteSegment(i) {
+  const segs = G1_DATA.segments;
+
+  if (segs.length <= 1) {
+    alert("至少要保留 1 个地形段");
+    return;
+  }
+
+  const prev = segs[i - 1];
+  const next = segs[i + 1];
+
+  // 自动修复拓扑：把删除段的区间让给下一段
+  if (prev && next) {
+    next.startKm = prev.endKm;
+  }
+
+  segs.splice(i, 1);
+  renderSegments();
+}
+
+/* =====================================================
+   地形分段地图拾取（复用 MapPicker）
+===================================================== */
+function openSegmentMap(i, pickType) {
+  MapPicker.open("segment", i, pickType, (action, data) => {
+    const seg = G1_DATA.segments[i];
+
+    if (action === "getCurrentPoint") {
+      return pickType === "start" ? seg.startPt : seg.endPt;
+    }
+
+    if (action === "setPoint") {
+      if (pickType === "start") {
+        seg.startPt = { lat: data.lat, lon: data.lon };
+      } else {
+        seg.endPt = { lat: data.lat, lon: data.lon };
+      }
+
+      // 自动反推 km / ele
+      const profStart = snapToProfile(seg.startPt.lat, seg.startPt.lon, G1_DATA.profile);
+      const profEnd   = snapToProfile(seg.endPt.lat, seg.endPt.lon, G1_DATA.profile);
+
+      seg.startKm = profStart.km;
+      seg.endKm   = profEnd.km;
+      seg.startEle = profStart.ele;
+      seg.endEle   = profEnd.ele;
+
+      // ★★★ 策略 C：拓扑校验
+      if (!SegmentManager.validateTopology(i)) return;
+
+      renderSegments();
+    }
+  });
+}
+
+/* =====================================================
+   ⭐ 地形段拓扑校验（防止段重叠/反转/二合一）
+   ===================================================== */
+function fixSegmentTopology(i) {
+  const segs = G1_DATA.segments;
+  const seg = segs[i];
+
+  const prev = segs[i - 1];
+  const next = segs[i + 1];
+
+  // 1️⃣ 当前段不能反转（必须 start < end）
+  if (seg.startKm >= seg.endKm) {
+    alert("当前地形段的起点必须小于终点，请重新选择地点！");
+    return false;
+  }
+
+  // 2️⃣ 修复上一段：不允许上一段终点 > 本段起点
+  if (prev) {
+    if (prev.endKm > seg.startKm) {
+      const diff = prev.endKm - seg.startKm;
+
+      // 允许微调 200 米
+      if (diff <= 0.2) {
+        prev.endKm = seg.startKm;
+      } else {
+        alert("调整过大，会导致上一段与本段重叠，请重新选择地点！");
+        return false;
+      }
+    }
+  }
+
+  // 3️⃣ 修复下一段：不允许下一段起点 < 本段终点
+  if (next) {
+    if (next.startKm < seg.endKm) {
+      const diff = seg.endKm - next.startKm;
+
+      // 允许微调 200 米
+      if (diff <= 0.2) {
+        next.startKm = seg.endKm;
+      } else {
+        alert("调整过大，会导致本段与下一段重叠，请重新选择地点！");
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+
+/* ========== 渲染人工场景节点 ========== */
+function renderManualScenes() {
+
+  normalizeManualScenes();   
+  const body = document.getElementById("mscTableBody");
+  body.innerHTML = "";
+
+  if (!G1_DATA || !Array.isArray(G1_DATA.manualScenes)) return;
+
+  G1_DATA.manualScenes.forEach((msc, i) => {
+
+    const tr = document.createElement("tr");
+
+    tr.innerHTML = `
+      <td>${i + 1}</td>
+
+      <td>人工节点</td>
+
+      <td>
+       <input id="msc_name_${i}" value="${msc.name || msc.shortName || ""}">
+      </td>
+
+      <td>
+        <textarea id="msc_desc_${i}" rows="2">${msc.desc || ""}</textarea>
+      </td>
+
+      <td>${msc.kmRange || ""}</td>
+      <td>${msc.eleRange || ""}</td>
+
+      <td>
+        <a href="https://www.openstreetmap.org/?mlat=${msc.startLat}&mlon=${msc.startLon}&zoom=14" target="_blank">
+          ${msc.startLat || ""}, ${msc.startLon || ""}
+        </a><br>
+       <button onclick="pickManual(${i}, 'start')">选起点</button>
+
+      </td>
+
+      <td>
+        <a href="https://www.openstreetmap.org/?mlat=${msc.endLat}&mlon=${msc.endLon}&zoom=14" target="_blank">
+          ${msc.endLat || ""}, ${msc.endLon || ""}
+        </a><br>
+    <button onclick="pickManual(${i}, 'end')">选终点</button>
+
+      </td>
+
+      <td>
+        <input id="msc_tags_${i}" value="${msc.tags || ""}">
+      </td>
+
+      <td>
+        <textarea id="msc_data_${i}" rows="2">${msc.data || ""}</textarea>
+      </td>
+
+      <td>
+        <input id="msc_media_${i}" value="${msc.media || ""}">
+      </td>
+
+      <td>
+        <button class="danger" onclick="deleteManualScene(${i})">删除</button>
+      </td>
+    `;
+
+    body.appendChild(tr);
+  });
+}
+
+
+
+
+/* ========== 写回人工节点 ========== */
+function syncManualScenesFromUI() {
+  if (!G1_DATA || !Array.isArray(G1_DATA.manualScenes)) return;
+
+  G1_DATA.manualScenes = G1_DATA.manualScenes.map((msc, i) => ({
+    ...msc,   // 保留 normalizeManualScenes 的 km/ele/坐标
+
+    id: i + 1,
+
+    name:      document.getElementById(`msc_name_${i}`).value,
+    shortName: document.getElementById(`msc_name_${i}`).value,
+    title:     document.getElementById(`msc_name_${i}`).value,
+
+    desc:      document.getElementById(`msc_desc_${i}`)?.value || "",
+    tags:      document.getElementById(`msc_tags_${i}`)?.value || "",
+    data:      document.getElementById(`msc_data_${i}`)?.value || "",
+    media:     document.getElementById(`msc_media_${i}`)?.value || ""
+  }));
+}
+
+
+/* ============================================================
+   Step 3-B: 自动补算 manualScenes 的 km / ele 区间
+   - 依赖：G1_DATA.profile + snapToProfile()
+   - 不影响：原有字段、原有导出逻辑
+============================================================ */
+function normalizeManualScenes() {
+  if (!G1_DATA || !Array.isArray(G1_DATA.manualScenes) || !Array.isArray(G1_DATA.profile)) {
+    return;
+  }
+
+  G1_DATA.manualScenes.forEach(msc => {
+    const sLat = parseFloat(msc.startLat);
+    const sLon = parseFloat(msc.startLon);
+    const eLat = parseFloat(msc.endLat);
+    const eLon = parseFloat(msc.endLon);
+
+    // 坐标不完整就清空区间，避免脏数据
+    if (isNaN(sLat) || isNaN(sLon) || isNaN(eLat) || isNaN(eLon)) {
+      msc.startKm = null;
+      msc.endKm = null;
+      msc.startEle = null;
+      msc.endEle = null;
+      msc.kmRange = "";
+      msc.eleRange = "";
+      return;
+    }
+
+    // 利用 profile 匹配最近点（前面 Step 3-A 已经插入 snapToProfile）
+    const start = snapToProfile(sLat, sLon, G1_DATA.profile);
+    const end   = snapToProfile(eLat, eLon, G1_DATA.profile);
+
+    msc.startKm  = start.km;
+    msc.endKm    = end.km;
+    msc.startEle = start.ele;
+    msc.endEle   = end.ele;
+
+    // 生成显示用区间字符串（可用于表格或报告）
+    if (start.km != null && end.km != null) {
+      msc.kmRange = `${start.km.toFixed(3)} - ${end.km.toFixed(3)}`;
+    } else {
+      msc.kmRange = "";
+    }
+
+    if (start.ele != null && end.ele != null) {
+      msc.eleRange = `${start.ele} - ${end.ele}`;
+    } else {
+      msc.eleRange = "";
+    }
+  });
+}
+
+
+/* ========== 校验人工节点是否填写完整（必须有坐标） ========== */
+function validateManualScenes() {
+  if (!G1_DATA || !Array.isArray(G1_DATA.manualScenes)) return true;
+
+  for (let i = 0; i < G1_DATA.manualScenes.length; i++) {
+    const m = G1_DATA.manualScenes[i];
+    const idx = i + 1;
+
+    const sLat = parseFloat(m.startLat);
+    const sLon = parseFloat(m.startLon);
+    const eLat = parseFloat(m.endLat);
+    const eLon = parseFloat(m.endLon);
+
+    if (isNaN(sLat) || isNaN(sLon) || isNaN(eLat) || isNaN(eLon)) {
+      alert(`人工节点 #${idx}「${m.name || "未命名节点"}」缺少坐标，请补全后再导出！`);
+      return false;
+    }
+  }
+  return true;
+}
+/* ========== 新增 & 删除 人工节点 ========== */
+function addManualScene() {
+  if (!G1_DATA) {
+    alert("请先加载 JSON");
+    return;
+  }
+  if (!Array.isArray(G1_DATA.manualScenes)) {
+    G1_DATA.manualScenes = [];
+  }
+
+  // ❌ 不要 syncManualScenesFromUI() —— 会清空输入
+
+  G1_DATA.manualScenes.push({
+    id: G1_DATA.manualScenes.length + 1,
+    nodeType: "manual",
+    name: "",
+    desc: "",
+    startLat: "",
+    startLon: "",
+    endLat: "",
+    endLon: "",
+    lengthM: 30,
+    kmRange: "",
+    eleRange: "",
+    startKm: null,
+    endKm: null,
+    startEle: null,
+    endEle: null,
+    tags: "",
+    data: "",
+    media: ""
+  });
+
+  renderManualScenes();
+}
+
+
+function deleteManualScene(i) {
+  if (!G1_DATA || !Array.isArray(G1_DATA.manualScenes)) return;
+
+  // ❌ 不要 syncManualScenesFromUI()
+  // 删除节点之后自然会重渲染，无需写回 UI
+
+  G1_DATA.manualScenes.splice(i, 1);
+  renderManualScenes();
+}
+
+/* =====================================================
+   🌍 通用地图拾取封装模块 MapPicker
+===================================================== */
+
+const MapPicker = {
+  mode: null,          // manual | segment | future node types
+  index: null,         // row index
+  pickType: null,      // "start" | "end"
+  callback: null,      // 写回回调
+
+  open(mode, index, pickType, callback) {
+    // ⭐ 1）必须先有 G1_DATA 和 profile，才能画轨迹 / 定位
+    if (!G1_DATA || !Array.isArray(G1_DATA.profile) || G1_DATA.profile.length === 0) {
+      alert("请先加载带有轨迹 profile 的 JSON（或从 G1 页面跳转进来）");
+      return;
+    }
+    this.mode = mode;
+    this.index = index;
+    this.pickType = pickType;
+    this.callback = callback;
+
+    selectedLat = null;
+    selectedLon = null;
+
+    document.getElementById("mapModal").style.display = "block";
+
+    // 打开地图
+    if (!map) {
+      map = L.map("map", { zoomControl: true }).setView([0, 0], 3);
+      baseLayers.osm.addTo(map);
+ // ★★★★★ 在这插入：第一次初始化地图后绘制轨迹
+      drawRouteProfile();
+      // 点击拾取点
+      map.on("click", e => {
+        selectedLat = e.latlng.lat.toFixed(6);
+        selectedLon = e.latlng.lng.toFixed(6);
+
+        if (mapMarker) mapMarker.remove();
+        mapMarker = L.marker(e.latlng).addTo(map);
+      });
+    }
+
+    // 定位当前节点位置（调用方返回）
+    const pt = callback("getCurrentPoint");
+    if (pt?.lat && pt?.lon) {
+      map.setView([pt.lat, pt.lon], 15);
+      if (mapMarker) mapMarker.remove();
+      mapMarker = L.marker([pt.lat, pt.lon]).addTo(map);
+    } else {
+      // 如果没有经纬度 → 定位到起始轨迹
+      const s0 = G1_DATA.profile?.[0];
+      if (s0?.lat && s0?.lon) {
+        map.setView([s0.lat, s0.lon], 13);
+      }
+    }
+
+    // 确保地图不压缩
+    setTimeout(() => map.invalidateSize(true), 200);
+  },
+
+  confirm() {
+    if (!selectedLat || !selectedLon) {
+      if (!mapMarker) return alert("请先选择位置");
+      const ll = mapMarker.getLatLng();
+      selectedLat = ll.lat.toFixed(6);
+      selectedLon = ll.lng.toFixed(6);
+    }
+
+    this.callback("setPoint", {
+      lat: +selectedLat,
+      lon: +selectedLon
+    });
+
+    closeMap();
+  }
+};
+
+
+let mapMarker = null;
+let currentPickIndex = null;
+let currentPickType = null;
+let selectedLat = null;
+let selectedLon = null;
+let map = null;
+let routeLine = null; // ⭐ 用来保存轨迹折线
+
+/* 正常的底图（修复不可用的 HikeBike 源） */
+const baseLayers = {
+  topo: L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+    maxZoom: 17,
+    attribution: "© OpenTopoMap"
+  }),
+  osm: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "© OpenStreetMap"
+  }),
+  hikebike: L.tileLayer("https://tile.waymarkedtrails.org/hiking/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution: "© Waymarked Trails"
+  })
+};
+/* ⭐ 绘制当前路线轨迹（根据 G1_DATA.profile） */
+function drawRouteProfile() {
+  if (!map) return;                 // 地图还没初始化就不画
+  if (!G1_DATA || !Array.isArray(G1_DATA.profile)) return;
+
+  // 取出所有有经纬度的点
+  const pts = G1_DATA.profile
+    .filter(p => p.lat != null && p.lon != null)
+    .map(p => [p.lat, p.lon]);
+
+  if (!pts.length) return;
+
+  // 如果之前已经画过一次，先移除
+  if (routeLine) {
+    try { routeLine.remove(); } catch (e) {}
+    routeLine = null;
+  }
+
+  // 画一条红色轨迹线
+  routeLine = L.polyline(pts, {
+    weight: 3,
+    opacity: 0.9
+  }).addTo(map);
+
+  // 让地图视野刚好包住整条轨迹
+  map.fitBounds(routeLine.getBounds());
+}
+
+/* 轨迹中点（profile 没有 lat/lon 时不会出错）*/
+function getProfileCenter() {
+  const p = G1_DATA?.profile;
+  if (Array.isArray(p) && p.length > 3) {
+    const mid = p[Math.floor(p.length / 2)];
+    if (mid.lat && mid.lon) return [mid.lat, mid.lon];
+  }
+  return [30, 103]; // fallback
+}
+
+
+
+/* 切换底图 */
+function switchBaseMap(type) {
+  if (!map) return;
+  Object.values(baseLayers).forEach(l => {
+    try { map.removeLayer(l); } catch (e) {}
+  });
+  baseLayers[type]?.addTo(map);
+}
+
+/* 搜索 */
+function searchLocation() {
+  const q = document.getElementById("mapSearchBox").value.trim();
+  if (!q) return;
+
+  fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`)
+    .then(r => r.json())
+    .then(res => {
+      if (!res.length) return alert("未找到位置");
+
+      const lat = parseFloat(res[0].lat);
+      const lon = parseFloat(res[0].lon);
+
+      map.setView([lat, lon], 15);
+
+      if (mapMarker) mapMarker.remove();
+      mapMarker = L.marker([lat, lon]).addTo(map);
+
+      selectedLat = lat.toFixed(6);
+      selectedLon = lon.toFixed(6);
+    });
+}
+
+/* 确定 */
+function confirmPoint() {
+  MapPicker.confirm();
+}
+
+
+/* 关闭地图 */
+function closeMap() {
+  document.getElementById("mapModal").style.display = "none";
+}
+
+/* ========== 关闭地图弹窗 ========== */
+function closeMap() {
+  document.getElementById("mapModal").style.display = "none";
+}
+
+/* ========== 根据两点经纬度计算距离（米） ========== */
+function computeLength(i) {
+  function rad(x) { return x * Math.PI / 180; }
+
+  const lat1 = +document.getElementById(`msc_lat_${i}`).value;
+  const lon1 = +document.getElementById(`msc_lon_${i}`).value;
+  const lat2 = +document.getElementById(`msc_lat_end_${i}`).value;
+  const lon2 = +document.getElementById(`msc_lon_end_${i}`).value;
+
+  const R = 6378137;
+  const dLat = rad(lat2 - lat1);
+  const dLon = rad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) ** 2;
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const dist = Math.round(R * c);
+
+  document.getElementById(`msc_length_${i}`).value = dist;
+}
+
+function pickManual(i, pickType) {
+  MapPicker.open("manual", i, pickType, (action, data) => {
+    const m = G1_DATA.manualScenes[i];
+
+    if (action === "getCurrentPoint") {
+      return pickType === "start"
+        ? { lat: parseFloat(m.startLat), lon: parseFloat(m.startLon) }
+        : { lat: parseFloat(m.endLat), lon: parseFloat(m.endLon) };
+    }
+
+        if (action === "setPoint") {
+      // ① 把当前所有输入写回 G1_DATA，防止重渲染丢内容
+      syncManualScenesFromUI();
+
+      const m = G1_DATA.manualScenes[i];
+
+      // ② 更新坐标
+      if (pickType === "start") {
+        m.startLat = data.lat;
+        m.startLon = data.lon;
+      } else {
+        m.endLat = data.lat;
+        m.endLon = data.lon;
+      }
+
+      // ③ 自动重新计算 km & ele
+      normalizeManualScenes();
+
+      // ④ 刷新 UI
+      renderManualScenes();
+    }
+
+  });
+}
+
+
+/* =====================================================
+   A5 —— 导出 / 草稿保存 / 自动加载（增强版）
+===================================================== */
+
+// ========= 规范化人工节点（旧版，已废弃，保留备查） =========
+function normalizeManualScenesLegacy() {
+  if (!G1_DATA || !Array.isArray(G1_DATA.manualScenes)) return [];
+
+  return G1_DATA.manualScenes.map(msc => {
+    const sLat = parseFloat(msc.startLat);
+    const sLon = parseFloat(msc.startLon);
+    const eLat = parseFloat(msc.endLat);
+    const eLon = parseFloat(msc.endLon);
+
+    return {
+      id: msc.id,
+      type: "人工节点",
+
+      // 与 segments 对齐的字段
+      title: msc.name || "",
+      subtitle: msc.desc || "",
+
+      startPt: {
+        lat: isNaN(sLat) ? null : sLat,
+        lon: isNaN(sLon) ? null : sLon,
+        ele: null
+      },
+      endPt: {
+        lat: isNaN(eLat) ? null : eLat,
+        lon: isNaN(eLon) ? null : eLon,
+        ele: null
+      },
+
+      // 进度条长度
+      lengthM: Number(msc.lengthM || 30)
+    };
+  });
+}
+
+/* ============================================================
+   ⭐ 新增：把 segments + weatherNodes + manualScenes → nodes[]
+   ============================================================ */
+function buildNodesV16() {
+  const nodes = [];
+
+  /* ---- 地形（segments） → nodes ---- */
+  if (Array.isArray(G1_DATA.segments)) {
+    G1_DATA.segments.forEach((seg, i) => {
+      nodes.push({
+        id: seg.id || ("T" + (i + 1)),
+        nodeType: "terrain",
+
+        startKm: seg.startKm ?? null,
+        endKm: seg.endKm ?? null,
+        positionKm: seg.startKm ?? null,   // ★ 新增：抽屉列表显示用
+
+        startPt: seg.startPt || {
+          lat: seg.startLat ?? null,
+          lon: seg.startLon ?? null,
+          ele: seg.startEle ?? null
+        },
+        endPt: seg.endPt || {
+          lat: seg.endLat ?? null,
+          lon: seg.endLon ?? null,
+          ele: seg.endEle ?? null
+        },
+
+        shortName: seg.type || "",
+        title: seg.title || "",
+        desc: seg.subtitle || seg.desc || "",
+
+        tags: [],
+        algo: "terrain-v1",
+
+        data: {
+          deltaEle: seg.deltaEle,
+          slopePct: seg.slopePct
+        }
+      });
+    });
+  }
+
+  /* ---- 天气（weatherNodes） → nodes ---- */
+if (Array.isArray(G1_DATA.weatherNodes)) {
+  G1_DATA.weatherNodes.forEach((w, i) => {
+
+    /* 天气类型（晴、多云、小雨…） */
+    const weatherType =
+      w.weather || w.wxShort || w.main || w.type || "";
+
+    /* 温度区间 */
+    const tMin = typeof w.tMin === "number" ? w.tMin : null;
+    const tMax = typeof w.tMax === "number" ? w.tMax : null;
+
+    /* 中心温度（前端最常用） */
+    const midT = (tMin != null && tMax != null)
+      ? Math.round((tMin + tMax) / 2)
+      : (typeof w.midT === "number" ? w.midT : null);
+
+    /* 完整副标题（UI 已经算好） */
+    const desc = w.desc || w.summary || "";
+
+    /* 默认使用 km 反推海拔 */
+    const ele = (typeof w.ele === "number") ? w.ele : getEleAtKm(w.km);
+
+    nodes.push({
+      id: w.id || ("W" + (i + 1)),
+      nodeType: "weather",
+
+      startKm: w.km ?? null,
+      endKm: w.km ?? null,
+
+      startPt: { lat: w.lat ?? null, lon: w.lon ?? null, ele },
+      endPt:   { lat: w.lat ?? null, lon: w.lon ?? null, ele },
+
+      /* 前端天气条用 shortName：多云 15° */
+      shortName:
+        (weatherType && midT != null)
+          ? `${weatherType} ${midT}°`
+          : (w.temp || weatherType || ""),
+
+      /* title 前端不用，留空即可 */
+      title: "",
+
+      /* desc = 风/降水/UV/体感 的整串文本 */
+      desc,
+
+      tags: [],
+      algo: "weather-v1",
+
+      /* 前端 JSON 需要的天气结构 */
+      data: {
+        weatherType,     // 多云
+        temp: midT,      // 15
+        tempMin: tMin,   // 13
+        tempMax: tMax,   // 17
+        feel: w.feel,
+        wind: w.wind,
+        pop: w.pop,
+        uv: w.uv
+      }
+    });
+  });
+}
+
+
+  /* ---- 人工（manualScenes） → nodes ---- */
+  if (Array.isArray(G1_DATA.manualScenes)) {
+    G1_DATA.manualScenes.forEach((msc, i) => {
+
+      const sLat = parseFloat(msc.startLat);
+      const sLon = parseFloat(msc.startLon);
+      const eLat = parseFloat(msc.endLat);
+      const eLon = parseFloat(msc.endLon);
+
+      nodes.push({
+        id: msc.id || ("M" + (i + 1)),
+        nodeType: "manual",
+
+        startKm: msc.startKm ?? null,
+        endKm:   msc.endKm ?? null,
+        positionKm: msc.startKm ?? null,   // ★ 新增：抽屉列表位置
+
+        startPt: {
+          lat: isNaN(sLat) ? null : sLat,
+          lon: isNaN(sLon) ? null : sLon,
+          ele: msc.startEle ?? null
+        },
+        endPt: {
+          lat: isNaN(eLat) ? null : eLat,
+          lon: isNaN(eLon) ? null : eLon,
+          ele: msc.endEle ?? null
+        },
+
+        shortName: msc.name || "",
+        title: msc.name || "",
+        desc: msc.desc || "",
+
+        tags: (msc.tags && typeof msc.tags === "string")
+          ? msc.tags.split(",").map(t => t.trim()).filter(t => t)
+          : [],
+
+        algo: "manual-v1",
+
+        data: {
+          lengthM: msc.lengthM ?? null,
+          raw: msc.data || ""
+        },
+
+        media: msc.media || ""
+      });
+    });
+  }
+
+  return nodes;
+}
+
+/* ============================================================
+   ⭐ Node Model 预览与文案编辑（不影响现有导出逻辑）
+   ============================================================ */
+let NODE_MODEL_PREVIEW = [];  // 仅用于预览 & 临时编辑
+
+// 映射 nodeType → 中文
+function mapNodeTypeToCN(t) {
+  const map = {
+    "terrain": "地形段",
+    "weather": "天气节点",
+    "manual": "人工节点",
+    "hazard": "风险节点",
+    "facility": "设施节点",
+    "ai_scene": "AI 场景"
+  };
+  return map[t] || t;
+}
+
+// ========= 导出 =========
+/* ============================================================
+   Step 3-A: 依据经纬度匹配 profile 最近点，返回 km / ele
+============================================================ */
+function snapToProfile(lat, lon, profile) {
+    if (!profile || profile.length === 0) return { km: null, ele: null };
+
+    let best = null;
+    let bestDist = Infinity;
+
+    profile.forEach(pt => {
+        if (pt.lat == null || pt.lon == null) return;
+
+        const dLat = pt.lat - lat;
+        const dLon = pt.lon - lon;
+        const distSq = dLat * dLat + dLon * dLon; // 不需要真实距离，比较平方即可
+
+        if (distSq < bestDist) {
+            bestDist = distSq;
+            best = pt;
+        }
+    });
+
+    return best ? { km: best.km, ele: best.ele } : { km: null, ele: null };
+}
+
+/* ============================================================
+   ⭐ 把 G1.meta 的统计字段继承到 ROUTE_NODES.meta.stats
+   - 不改变你原有 meta 字段
+   - stats 放在 meta.stats，避免污染 node model
+============================================================ */
+function buildRouteMetaWithStats() {
+  const base = {
+    routeId: "",
+    name: "",
+    region: "",
+    originalFile: "",
+    startDate: null,
+    tags: []
+  };
+
+  const m = (G1_DATA && G1_DATA.meta && typeof G1_DATA.meta === "object") ? G1_DATA.meta : {};
+  const out = { ...base, ...m };
+
+  // 仅当 G1.meta 里存在这些字段时才写入 stats
+  const hasAny = m && Object.keys(m).length > 0;
+
+
+  if (hasAny) {
+    out.stats = {
+      distanceKm: (m.distanceKm != null && m.distanceKm !== "") ? Number(m.distanceKm) : null,
+      maxEle:     (m.maxEle != null && m.maxEle !== "") ? Number(m.maxEle) : null,
+      minEle:     (m.minEle != null && m.minEle !== "") ? Number(m.minEle) : null,
+      ascent:     (m.ascent != null && m.ascent !== "") ? Number(m.ascent) : null,
+      descent:    (m.descent != null && m.descent !== "") ? Number(m.descent) : null,
+      source: "G1",
+      updatedAt: new Date().toISOString()
+    };
+
+    // 兜底：如果 distanceKm 没有，但 profile 最后一个点有 km，则用它补上
+    if ((out.stats.distanceKm == null) && Array.isArray(G1_DATA?.profile) && G1_DATA.profile.length) {
+      const last = G1_DATA.profile[G1_DATA.profile.length - 1];
+      if (typeof last.km === "number") out.stats.distanceKm = Number(last.km);
+      // 如果是 track→profile 兼容过来的 cumDist（米），也做兜底
+      if (out.stats.distanceKm == null && typeof last.cumDist === "number") {
+        out.stats.distanceKm = Number((last.cumDist / 1000).toFixed(3));
+      }
+    }
+  }
+
+  return out;
+}
+// ===============================
+// 从 G1_DATA.meta 生成导出用 meta
+// ===============================
+function buildRouteMetaFromG1() {
+  const base = {
+    routeId: "",
+    name: "",
+    region: "",
+    originalFile: "",
+    startDate: null,
+    tags: []
+  };
+
+  if (!window.G1_DATA || !G1_DATA.meta) {
+    return base;
+  }
+
+  const m = G1_DATA.meta;
+
+  return {
+    ...base,
+    ...m,
+    stats: {
+      distanceKm: m.distanceKm != null ? Number(m.distanceKm) : null,
+      maxEle:     m.maxEle     != null ? Number(m.maxEle)     : null,
+      minEle:     m.minEle     != null ? Number(m.minEle)     : null,
+      ascent:     m.ascent     != null ? Number(m.ascent)     : null,
+      descent:    m.descent    != null ? Number(m.descent)    : null,
+      source: "G1",
+      updatedAt: new Date().toISOString()
+    }
+  };
+}
+
+/* ============================================================
+   ⭐ Step 1：导出 Node Model（唯一按钮）
+   ============================================================ */
+function exportNodeModel() {
+
+syncManualScenesFromUI();
+normalizeManualScenes();
+  const out = {
+        version: "1.6",
+        generatedAt: new Date().toISOString(),
+        meta: buildRouteMetaWithStats(),
+
+        // 轨迹（profile）
+        profile: G1_DATA.profile || [],
+
+        // 地形段（segments）
+        segments: G1_DATA.segments || [],
+
+        // 天气节点（weatherNodes）
+        weatherNodes: G1_DATA.weatherNodes || [],
+
+        // 人工场景（manualScenes）
+        manualScenes: G1_DATA.manualScenes || []
+    };
+
+    const blob = new Blob([JSON.stringify(out, null, 2)], {type: "application/json"});
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "ROUTE_NODES.json";
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+
+// ========= 保存草稿 =========
+function saveDraft() {
+  if (!G1_DATA) return alert("无可保存内容，请先加载 JSON");
+
+    syncSegmentsFromUI();
+  syncManualScenesFromUI();
+  normalizeManualScenes();   // ★ 保存草稿时也把 km / ele 补上
+
+  // ★ 新增：草稿也需要坐标完整性校验
+  if (!validateManualScenes()) return;
+
+
+  localStorage.setItem("G1_EDITOR_DRAFT", JSON.stringify(G1_DATA));
+  alert("草稿已保存");
+}
+
+
+// ========= 清除草稿 =========
+function clearDraft() {
+  localStorage.removeItem("G1_EDITOR_DRAFT");
+  alert("草稿已清除");
+}
+window.addEventListener("load", () => {
+
+  // ★★★★★ 先检查是否从 G1 页面带入数据 ★★★★★
+  const fromG1 = localStorage.getItem("G1_FROM_ANALYZER");
+  if (fromG1) {
+    try {
+      G1_DATA = JSON.parse(fromG1);
+      console.log("🔥 来自 G1 的完整数据：", G1_DATA);
+      initDataAfterLoad();
+      document.getElementById("loadStatus").innerHTML =
+        "<span style='color:green'>✔ 已从 G1 页面自动导入</span>";
+    } catch (e) {
+      console.error("G1 数据解析失败:", e);
+    }
+
+    // ★ 用完再删（不能提前删）
+    localStorage.removeItem("G1_FROM_ANALYZER");
+    return;
+  }
+
+  // ★★★★★ 否则检查草稿 ★★★★★
+  const draft = localStorage.getItem("G1_EDITOR_DRAFT");
+  if (draft) {
+    try {
+      G1_DATA = JSON.parse(draft);
+      console.log("🟧 恢复草稿：", G1_DATA);
+      initDataAfterLoad();
+      document.getElementById("loadStatus").innerHTML =
+        "<span style='color:orange'>✔ 已从草稿自动恢复</span>";
+    } catch (e) {
+      console.error("草稿加载失败:", e);
+    }
+  }
+});
+/* ============================================================
+   SegmentManager — 地形段自动助手（策略 C）
+   ============================================================ */
+
+const SegmentManager = {
+
+  /* ---------- 找出某个 km 应该属于哪一段 ---------- */
+  findSegmentIndexAtKm(km, segments) {
+    for (let i = 0; i < segments.length; i++) {
+      const s = segments[i];
+      if (km >= s.startKm && km <= s.endKm) return i;
+    }
+    return -1;
+  },
+
+  /* ---------- 自动分裂段 ---------- */
+  insertSegmentAtKm(km, newSeg) {
+    const segs = G1_DATA.segments;
+    const idx = this.findSegmentIndexAtKm(km, segs);
+
+    if (idx < 0) {
+      alert("⚠️ 无法插入地形段：该位置不在任何现有地形段内！");
+      return false;
+    }
+
+    const target = segs[idx];
+
+    // 不能在段首或段尾 10m 内插入
+    if (Math.abs(km - target.startKm) < 0.01 ||
+        Math.abs(km - target.endKm) < 0.01) {
+      alert("⚠️ 插入位置太靠近段边界，请在中间位置选择！");
+      return false;
+    }
+
+    // —— 分裂 —— //
+    const segA = {
+      ...target,
+      endKm: km
+    };
+
+    const segB = {
+      id: "NEW",
+      type: "人工地形",
+      title: newSeg.title || "人工新增",
+      subtitle: "",
+      startKm: km,
+      endKm: km + 0.05,
+      startPt: newSeg.startPt,
+      endPt: newSeg.endPt
+    };
+
+    const segC = {
+      ...target,
+      startKm: km
+    };
+
+    // 替换原段 → 插入新段
+    segs.splice(idx, 1, segA, segB, segC);
+    this.reindex();
+
+    return true;
+  },
+
+  /* ---------- 删除段（自动合并相邻段） ---------- */
+  deleteSegment(i) {
+    const segs = G1_DATA.segments;
+
+    if (i === 0 || i === segs.length - 1) {
+      alert("⚠️ 首尾段不能删除（保持路线连续性）");
+      return false;
+    }
+
+    const prev = segs[i - 1];
+    const next = segs[i + 1];
+
+    // 合并：前段 + 后段
+    prev.endKm = next.endKm;
+    prev.endPt = next.endPt;
+
+    segs.splice(i, 2);
+    this.reindex();
+    return true;
+  },
+
+  /* ---------- 修改段时的拓扑校验 ---------- */
+  validateTopology(i) {
+    const segs = G1_DATA.segments;
+    const seg = segs[i];
+    const prev = segs[i - 1];
+    const next = segs[i + 1];
+
+    if (seg.startKm >= seg.endKm) {
+      alert("⚠️ 起点必须小于终点！");
+      return false;
+    }
+
+    // 上段不能超过本段起点
+    if (prev && prev.endKm > seg.startKm) {
+      const diff = prev.endKm - seg.startKm;
+      if (diff > 0.2) {
+        alert("⚠️ 调整过大，会与上一段重叠！");
+        return false;
+      }
+      prev.endKm = seg.startKm;
+    }
+
+    // 下段不能早于本段终点
+    if (next && next.startKm < seg.endKm) {
+      const diff = seg.endKm - next.startKm;
+      if (diff > 0.2) {
+        alert("⚠️ 调整过大，会与下一段重叠！");
+        return false;
+      }
+      next.startKm = seg.endKm;
+    }
+
+    return true;
+  },
+
+  /* ---------- 重新编号 ---------- */
+  reindex() {
+    G1_DATA.segments.forEach((s, i) => {
+      s.id = "T" + (i + 1);
+    });
+  }
+};
+
+
+</script>   
+
+
+
+</body>
+</html>

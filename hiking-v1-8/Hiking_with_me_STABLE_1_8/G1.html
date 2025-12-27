@@ -1,0 +1,3315 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Route Builder — G1 轨迹解析</title>
+
+<style>
+body{
+  font-family:Arial,Helvetica,sans-serif;
+  background:#f4f4f4;margin:0;padding:20px;
+}
+h1{margin-bottom:30px;}
+h2{margin-top:30px;}
+.box{
+  background:#fff;padding:20px;border-radius:10px;
+  margin-bottom:30px;border:1px solid:#ddd;
+}
+table{
+  width:100%;border-collapse:collapse;margin-top:15px;font-size:14px;
+}
+td,th{
+  border:1px solid:#ccc;padding:6px;text-align:left;
+}
+.meta{
+  white-space:pre-line;background:#fafafa;padding:10px;
+  border-radius:8px;border:1px solid:#ccc;
+}
+.btn{
+  padding:8px 16px;background:#007bff;border:none;color:#fff;
+  border-radius:6px;margin-right:10px;cursor:pointer;font-size:14px;
+}
+/* 轨迹模式按钮被选中时的样式 */
+.clean-selected{
+  box-shadow:0 0 0 2px rgba(0,0,0,0.35) inset;
+  transform:scale(1.02);
+}
+.scene-box{
+  border:1px solid:#ccc;border-radius:12px;padding:15px;
+  margin-bottom:15px;background:#fff;
+}
+.note{
+  font-size:12px;color:#555;margin-top:8px;
+}
+#progressContainer{
+  margin-top:10px;height:10px;background:#eee;border-radius:5px;
+  overflow:hidden;display:none;
+}
+#progressBar{
+  height:100%;width:0;background:#007bff;
+  transition:width 0.2s;
+}
+
+/* Stepper 样式 */
+.stepper {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e5e5;
+  margin-bottom: 15px;
+}
+
+.step { display:flex; align-items:center; }
+.step .circle {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: #ccc; color: #fff;
+  display:flex; align-items:center; justify-content:center;
+  margin-right: 8px; font-size: 13px;
+}
+.step.active .circle { background:#1a73e8; }
+.step .label { font-size:14px; color:#666; }
+.step.active .label { color:#1a73e8; font-weight:bold; }
+
+.line {
+  flex:1; height:1px; background:#ddd; margin:0 12px;
+}
+
+/* 隐藏 G2/G3 区域 */
+.hide { display:none !important; }
+
+</style>
+<!-- Leaflet 样式 -->
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+
+<!-- Leaflet 脚本 -->
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+</head>
+
+<body>
+
+<!-- Stepper -->
+<div class="stepper">
+  <div class="step active">
+    <span class="circle">1</span>
+    <span class="label">G1 — 轨迹解析</span>
+  </div>
+  <div class="line"></div>
+
+  <div class="step">
+    <span class="circle">2</span>
+    <span class="label">G2 — 外部信息获取</span>
+  </div>
+  <div class="line"></div>
+
+  <div class="step">
+    <span class="circle">3</span>
+    <span class="label">G3 — 场景气泡生成</span>
+  </div>
+</div>
+
+<h1>Route Builder — G1 轨迹解析</h1>
+
+<!-- Step 1 -->
+<div class="box">
+  <h2>Step 1｜上传轨迹 (GPX/KML) + 选择日期</h2>
+  <input type="file" id="fileInput">
+ <input type="date" id="dateInput" value="">
+  <button class="btn" onclick="parseTrack()">解析轨迹</button>
+  <div id="routeName" class="meta"></div>
+<div id="routeRegion" class="meta"></div>
+  <div id="meta" class="meta"></div>
+  <!-- ========== 新增：轨迹预览地图（可视化原始/清洗对比） ========== -->
+<div id="trackPreviewBox" style="margin-top:15px;">
+  <h3 style="font-size:14px;margin-bottom:6px;">轨迹预览（原始 / 清洗对比）</h3>
+
+  <div id="trackMap" style="
+    width:100%;
+    height:260px;
+    border-radius:8px;
+    overflow:hidden;
+    border:1px solid #ccc;
+  "></div>
+
+  <div style="margin-top:10px; display:flex; gap:10px;">
+  <button id="btnShowRaw"  class="btn btn-sm" style="background:#d9534f;">原始轨迹</button>
+  <button id="btnShowL1"   class="btn btn-sm" style="background:#5cb85c;">Level-1 清洗</button>
+  <button id="btnShowL2"   class="btn btn-sm" style="background:#0275d8;">Level-2 深度清洗</button>
+<div id="pointStats" style="margin-top:8px; font-size:13px; color:#333;">
+  <!-- 三个数字会自动填进去 -->
+</div>
+
+
+</div>
+
+</div>
+
+<!-- Step 2（G1） -->
+<div class="box">
+  <h2>Step 2｜生成自然分段（天气 / 地形 / 地貌）</h2>
+
+  <!-- 生成 G1 -->
+  <button class="btn" onclick="buildG1()">生成自然分段</button>
+
+  <div id="progressContainer">
+    <div id="progressBar"></div>
+  </div>
+  <div id="progressText" class="note"></div>
+
+  <!-- ★ 新按钮：导出 JSON -->
+  <button id="openEditorBtn" class="btn" style="margin-top:10px;">进入人工编辑器</button>
+<button id="downloadJsonBtn" class="btn" style="margin-top:10px; margin-left:10px;">下载 JSON</button>
+
+  <!-- G1 报告输出位置 -->
+  <div id="g1"></div>
+</div>
+
+<!-- 隐藏旧 G2 / G3 -->
+<div class="hide">
+  <div id="g2"></div>
+  <div id="scenes"></div>
+</div>
+
+
+
+<!-- 底部操作 -->
+<div style="display:flex; justify-content:flex-end; margin-top:40px;">
+  <button class="btn" style="background:#666;" onclick="alert('G1 保存成功')">保存</button>
+  <button class="btn" onclick="window.location.href='G2.html'">下一步 →</button>
+</div>
+
+<!-- 你的所有 JS 逻辑保持不变，不动任何一行 -->
+<script>
+// 此处自动保留你原本的所有逻辑（解析轨迹、G1、G2、场景等）
+// 我不会修改你的任何函数
+</script>
+</body>
+</html>
+
+
+<script>
+
+
+//-----------------------------------------------------
+// 工具：Haversine 距离
+//-----------------------------------------------------
+function dist(lat1,lon1,lat2,lon2){
+  const R=6371000;
+  const toRad=x=>x*Math.PI/180;
+  const dLat=toRad(lat2-lat1);
+  const dLon=toRad(lon2-lon1);
+  const a =
+    Math.sin(dLat/2)**2 +
+    Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return 2*R*Math.asin(Math.sqrt(a));
+}
+//-----------------------------------------------------
+// 【第 1 小步】统一 7 大类分段的占位函数（不会被调用，不影响现有功能）
+// 用于未来动态生成：地形 / 地貌 / 植被 / 路面 / 设施 / 景观文化 / 天气
+//-----------------------------------------------------
+function buildUnifiedSegments() {
+  return {
+    topography: [],     // 2.1 地形
+    geomorphology: [],  // 2.2 地貌
+    vegetation: [],     // 2.3 植被
+    surface: [],        // 3 路面
+    facilities: [],     // 4 设施
+    culture: [],        // 5 景观文化
+    weather: []         // 7 天气（关键点或区间）
+  };
+}
+
+//-----------------------------------------------------
+// 统一的分段结构
+//-----------------------------------------------------
+function createSegmentItem(params){
+  return {
+    id: params.id || "",
+    startKm: params.startKm || 0,
+    endKm: params.endKm || 0,
+    startEle: params.startEle || 0,
+    endEle: params.endEle || 0,
+    label: params.label || "",
+    desc: params.desc || "",
+    startPt: params.startPt || null,
+    endPt: params.endPt || null,
+    source: params.source || ""
+  };
+}
+//-----------------------------------------------------
+// 【第 2 小步】动态生成分段点（仅创建，不参与任何实际逻辑）
+//-----------------------------------------------------
+function computeRouteBreakpoints(trackPoints) {
+
+  if (!trackPoints || trackPoints.length < 2) {
+    return { mode: "short", points: [] };
+  }
+
+  // 起点 (P0) 与终点 (P_end)
+  const P0 = trackPoints[0];
+  const P_end = trackPoints[trackPoints.length - 1];
+
+  // 计算总距离与海拔差
+  let totalDist = 0;
+  for (let i = 1; i < trackPoints.length; i++) {
+    const d = dist(
+      trackPoints[i - 1].lat, trackPoints[i - 1].lng,
+      trackPoints[i].lat, trackPoints[i].lng
+    );
+    totalDist += d;
+  }
+
+  const totalEleGain = Math.abs(P_end.ele - P0.ele);
+
+  // 判定 3 段 or 5 段
+  const isLongRoute = (totalDist > 10) || (totalEleGain > 1000);
+
+  let breakpoints = [];
+
+  if (!isLongRoute) {
+    //-----------------------------------------------------
+    // 3 段：P0 → P2(最高点) → P_end
+    //-----------------------------------------------------
+    const highestIdx = findHighestPointIndex(trackPoints);
+    const P2 = trackPoints[highestIdx];
+
+    breakpoints = [
+      { id: "P0", pt: P0, km: 0 },
+      { id: "P2_highest", pt: P2, km: P2.cumDist/1000 },
+      { id: "P_end", pt: P_end, km: totalDist/1000 }
+    ];
+
+    return { mode: "short", points: breakpoints };
+  }
+
+  //-----------------------------------------------------
+  // 5 段：P0 → P1(1/3) → P2最高点 → P3(2/3) → P_end
+  //-----------------------------------------------------
+  const P1 = getPointAtDistance(trackPoints, totalDist * 0.333);
+  const highestIdx = findHighestPointIndex(trackPoints);
+  const P2 = trackPoints[highestIdx];
+  const P3 = getPointAtDistance(trackPoints, totalDist * 0.666);
+
+  breakpoints = [
+    { id: "P0", pt: P0, km: 0 },
+    { id: "P1_33", pt: P1, km: P1.cumDist/1000 },
+    { id: "P2_highest", pt: P2, km: P2.cumDist/1000 },
+    { id: "P3_66", pt: P3, km: P3.cumDist/1000 },
+    { id: "P_end", pt: P_end, km: totalDist/1000 }
+  ];
+
+  return { mode: "long", points: breakpoints };
+}
+
+//-----------------------------------------------------
+// 找最高点
+//-----------------------------------------------------
+function findHighestPointIndex(track) {
+  let idx = 0;
+  let maxEle = -99999;
+  for (let i = 0; i < track.length; i++) {
+    if (track[i].ele > maxEle) {
+      maxEle = track[i].ele;
+      idx = i;
+    }
+  }
+  return idx;
+}
+
+//-----------------------------------------------------
+// 按距离寻找对应轨迹点
+//-----------------------------------------------------
+function getPointAtDistance(track, targetDist) {
+  let acc = 0;
+  for (let i = 1; i < track.length; i++) {
+    let d = dist(
+      track[i - 1].lat, track[i - 1].lng,
+      track[i].lat, track[i].lng
+    );
+    if (acc + d >= targetDist) {
+      return track[i];
+    }
+    acc += d;
+  }
+  return track[track.length - 1];
+}
+//-----------------------------------------------------
+// 【第 3 小步】统一 7 大类段落结构容器
+//-----------------------------------------------------
+function buildUnifiedCategoryContainer() {
+  return {
+    weather: [],         // 天气
+    topography: [],      // 地形
+    geomorphology: [],   // 地貌
+    vegetation: [],      // 植被
+    surface: [],         // 路面
+    facilities: [],      // 设施
+    culture: []          // 景观文化
+  };
+}
+
+//-----------------------------------------------------
+// 创建统一段落对象模板
+//-----------------------------------------------------
+function createUnifiedSegment(id, startKm, endKm, startEle, endEle, label, desc, startPt, endPt, source) {
+  return {
+    id: id || "",
+    startKm: startKm || 0,
+    endKm: endKm || 0,
+    startEle: startEle || 0,
+    endEle: endEle || 0,
+    label: label || "",
+    desc: desc || "",
+    startPt: startPt || null,
+    endPt: endPt || null,
+    source: source || ""
+  };
+}
+//-----------------------------------------------------
+// 【第 4 小步】根据分段点生成统一格式空段落
+//-----------------------------------------------------
+function buildEmptyUnifiedSegments(breakpointResult) {
+  if (!breakpointResult || !breakpointResult.points || breakpointResult.points.length < 2) {
+    return [];
+  }
+
+  const pts = breakpointResult.points;  // P0~P2~P_end
+  let segments = [];
+
+  for (let i = 0; i < pts.length - 1; i++) {
+
+    // 自动生成编号（S1, S2, S3…）
+    let id = "S" + (i + 1);
+
+    let startKm = pts[i].km;
+    let endKm   = pts[i+1].km;
+
+    // 海拔区间
+    let startEle = pts[i].pt.ele;
+    let endEle   = pts[i + 1].pt.ele;
+
+    // 起点与终点坐标
+    let startPt = pts[i].pt;
+    let endPt   = pts[i + 1].pt;
+
+    let seg = createUnifiedSegment(
+      id,
+      startKm,
+      endKm,
+      startEle,
+      endEle,
+      "",   // label
+      "",   // desc
+      startPt,
+      endPt,
+      ""    // source
+    );
+
+    segments.push(seg);
+  }
+
+  return segments;
+}
+
+//-------------------------------------------------------------
+// A. 分段点计算（用于 3 段 / 5 段）——上面已经定义，这里保留一份兼容
+//-------------------------------------------------------------
+
+
+//-------------------------------------------------------------
+// B. 统一段落模板 + 类别容器 —— 上面已有，此处保持同名实现
+//-------------------------------------------------------------
+
+
+//-------------------------------------------------------------
+// C. 将分段点转换成统一段落框架（空段落）——同上
+//-------------------------------------------------------------
+//-----------------------------------------------------
+// ★ 新增：自然分段 JSON 全局缓存
+//-----------------------------------------------------
+window._G1_EXPORT_JSON = null;
+
+// -----------------------------------------------------
+// 全局数据
+// -----------------------------------------------------
+let trackPoints = [];      // 清洗后的轨迹（下游所有算法继续用这个）
+let rawTrackPoints = [];   // 原始轨迹（仅做备份，不参与计算）
+
+let totalDist = 0;
+let ascent    = 0;
+let descent   = 0;
+let minEle    = Infinity;
+let maxEle    = -Infinity;
+
+let g1Segments   = [];
+let weatherZones = []; // Z1–Z? 当天天气关键点
+// Level-1 / Level-2 备份（对象数组）
+let l1TrackPoints = [];   // Level-1 清洗后的轨迹对象
+let l2TrackPoints = [];   // Level-2 深度清洗后的轨迹对象（根据 L1 构造）
+// ★ 给导出 JSON 用的全局占位，避免未定义错误
+let vegSeg = [];       // 植被段
+let facilities = [];   // 设施列表（暂时可以为空）
+
+// 当前被选中用于后续分析的轨迹模式：raw | l1 | l2
+window._currentTrackMode = "l1";
+
+//-----------------------------------------------------
+// 统一 7 大类容器
+//-----------------------------------------------------
+let unified7 = {
+  weather:    [],
+  geomorph:   [],
+  vegetation: [],
+  surface:    [],
+  facility:   [],
+  culture:    [],
+  summary:    []
+};
+// ======================================
+// TopoSeg 4.0 — 科学增强版（趋势持续性 + 曲率 + 粗糙度）
+// 不影响你的任何其他逻辑字段
+// ======================================
+function topoSeg20(points) {
+
+    if (!points || points.length < 2) return [];
+
+    // --------------------------------------
+    // 地球距离
+    // --------------------------------------
+    function d(a, b) {
+        const R = 6371000;
+        if (!a || !b) return 0;
+        const dLat = (b.lat - a.lat) * Math.PI / 180;
+        const dLon = (b.lon - a.lon) * Math.PI / 180;
+        const lat1 = a.lat * Math.PI / 180;
+        const lat2 = b.lat * Math.PI / 180;
+        const h = Math.sin(dLat/2)**2 +
+                  Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+        return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    // --------------------------------------
+    // 累计距离
+    // --------------------------------------
+    points[0].cumDist = 0;
+    for (let i = 1; i < points.length; i++) {
+        points[i].cumDist = points[i-1].cumDist + d(points[i], points[i-1]);
+    }
+
+    const totalDist = points[points.length - 1].cumDist;
+
+    // --------------------------------------
+    // 动态目标距离（保持你的原逻辑）
+    // --------------------------------------
+    let WINDOW = 40;
+    if (totalDist < 6000) WINDOW = 20;
+    else if (totalDist < 15000) WINDOW = 30;
+    else if (totalDist < 30000) WINDOW = 40;
+    else WINDOW = 50;
+
+    // ======================================
+    // ① 固定距离趋势：最近点趋势（基线）
+    // ======================================
+    function trendSlope(i) {
+        const target = points[i].cumDist + WINDOW;
+
+        let bestJ = i;
+        let bestDiff = Infinity;
+
+        for (let j = i + 1; j < points.length; j++) {
+            const diff = Math.abs(points[j].cumDist - target);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                bestJ = j;
+            }
+            if (points[j].cumDist - points[i].cumDist > WINDOW * 2) break;
+        }
+
+        const dist = points[bestJ].cumDist - points[i].cumDist;
+        if (dist <= 0) return 0;
+
+        const dh = points[bestJ].ele - points[i].ele;
+        return dh / dist * 100;
+    }
+
+    let slopeArr = points.map((_, i) => trendSlope(i));
+
+    // ======================================
+    // ② 趋势持续性修正（Slope Persistence）
+    // ======================================
+    for (let i = 2; i < slopeArr.length; i++) {
+        const prev = slopeArr[i - 1];
+        const curr = slopeArr[i];
+
+        // 如果方向突变、且幅度更小 → 判定为噪声 → 平滑到前一个趋势
+        if (Math.sign(curr) !== Math.sign(prev) && Math.abs(curr) < Math.abs(prev)) {
+            slopeArr[i] = prev * 0.9;  // 保留一点衰减
+        }
+    }
+
+    // ======================================
+    // ③ 地形曲率（Curvature）增强趋势
+    // ======================================
+    function curvature(i) {
+        if (i <= 0 || i >= points.length - 1) return 0;
+        return points[i+1].ele + points[i-1].ele - 2 * points[i].ele;
+    }
+
+    for (let i = 1; i < slopeArr.length - 1; i++) {
+        const curv = curvature(i);
+
+        if (curv > 1) {
+            // 凹坡（坡底） → 真实趋势比表面看起来更陡
+            slopeArr[i] *= 1.15;
+        } 
+        else if (curv < -1) {
+            // 凸坡（坡顶） → 趋势应减弱
+            slopeArr[i] *= 0.85;
+        }
+    }
+
+    // ======================================
+    // ④ 地形粗糙度 TRI → 自适应 MIN_LEN
+    // ======================================
+    function localTRI(i) {
+        let arr = [];
+        for (let k = -5; k <= 5; k++) {
+            if (points[i + k]) arr.push(points[i + k].ele);
+        }
+        if (arr.length < 3) return 0;
+        const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
+        const variance = arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length;
+        return Math.sqrt(variance);
+    }
+
+    let TRI = 0;
+    for (let i = 0; i < points.length; i += 10) {
+        TRI += localTRI(i);
+    }
+    TRI /= (points.length / 10);
+
+    // TRI 高 = 地形粗糙 → MIN_LEN 更长
+    let TRI_FACTOR = 1 + Math.min(TRI / 30, 0.5); // 最大增加 50%
+
+    // 原始 MIN_LEN 逻辑（保留）
+    let change = 0;
+    for (let i = 1; i < slopeArr.length; i++) {
+        if (Math.sign(slopeArr[i]) !== Math.sign(slopeArr[i-1])) change++;
+    }
+    const changeRate = change / slopeArr.length;
+
+    let MIN_LEN = WINDOW * 2;
+    if (changeRate > 0.25) MIN_LEN = WINDOW * 3;
+    if (changeRate > 0.35) MIN_LEN = WINDOW * 4;
+
+    MIN_LEN *= TRI_FACTOR; // 加入地形粗糙因素
+
+    // --------------------------------------
+    // 三点平滑（保留）
+    // --------------------------------------
+    slopeArr = slopeArr.map((_, i) => {
+        let a = slopeArr[i-1] ?? slopeArr[i];
+        let b = slopeArr[i];
+        let c = slopeArr[i+1] ?? slopeArr[i];
+        return (a+b+c)/3;
+    });
+
+    // --------------------------------------
+    // 海拔敏感度（保留）
+    // --------------------------------------
+    const avgEle = points.reduce((s,p)=>s+p.ele,0)/points.length;
+    let SLOPE_FACTOR = 1;
+    if (avgEle > 3000) SLOPE_FACTOR = 1.5;
+    else if (avgEle > 1500) SLOPE_FACTOR = 1.2;
+
+    // --------------------------------------
+    // UIAA 坡度分类（保留）
+    // --------------------------------------
+    function slopeClass(rawPct) {
+        const pct = rawPct / SLOPE_FACTOR;
+        const deg = Math.atan(pct / 100) * 57.3;
+
+        if (deg > 25) return "极陡上坡";
+        if (deg > 15) return "陡上坡";
+        if (deg > 5)  return "缓上坡";
+
+        if (deg < -25) return "极陡下坡";
+        if (deg < -15) return "陡下坡";
+        if (deg < -5)  return "缓下坡";
+
+        return "平缓路";
+    }
+
+    // --------------------------------------
+    // STEP1：切段（保留）
+    // --------------------------------------
+    let rawSegs = [];
+    let s = 0;
+    let cur = slopeClass(slopeArr[0]);
+
+    for (let i = 1; i < slopeArr.length; i++) {
+        const t = slopeClass(slopeArr[i]);
+        if (t !== cur) {
+            rawSegs.push({ start: s, end: i-1, type: cur });
+            s = i;
+            cur = t;
+        }
+    }
+    rawSegs.push({ start: s, end: slopeArr.length-1, type: cur });
+
+    // --------------------------------------
+    // STEP2：短段过滤（保留+TRI增强）
+    // --------------------------------------
+    let stage2 = [];
+    for (let seg of rawSegs) {
+        const len = points[seg.end].cumDist - points[seg.start].cumDist;
+        if (len < MIN_LEN) {
+            if (stage2.length)
+                stage2[stage2.length-1].end = seg.end;
+        } else stage2.push(seg);
+    }
+
+    // --------------------------------------
+    // STEP3：合并（保留）
+    // --------------------------------------
+    let merged = [];
+    for (let seg of stage2) {
+        if (merged.length && merged[merged.length-1].type === seg.type)
+            merged[merged.length-1].end = seg.end;
+        else
+            merged.push({ ...seg });
+    }
+
+    // --------------------------------------
+    // STEP4：输出（完全保持你的结构）
+    // --------------------------------------
+    let out = [];
+
+    for (let seg of merged) {
+        const startPt = points[seg.start];
+        const endPt   = points[seg.end];
+
+        const dist = endPt.cumDist - startPt.cumDist;
+        const delta = endPt.ele - startPt.ele;
+
+        const pct = (delta / dist) * 100;
+        const deg = Math.atan(delta / dist) * 57.3;
+
+        const desc =
+            `持续 ${Math.round(dist)} m｜` +
+            `高差 ${delta >= 0 ? "+" + delta : delta} m｜` +
+            `斜率 ${pct.toFixed(1)}%｜` +
+            `坡度 ${deg.toFixed(1)}°`;
+
+        out.push({
+            startKm: startPt.cumDist / 1000,
+            endKm:   endPt.cumDist / 1000,
+
+            startPt,
+            endPt,
+
+            deltaEle: Math.round(delta),
+            slopePct: Number(pct.toFixed(1)),
+            slopeClass: seg.type,
+            type: seg.type,
+            title: seg.type,
+            description: desc
+        });
+    }
+
+    return out;
+}
+
+async function reverseGeocode(lat, lon){
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=5&accept-language=zh`;
+
+  try{
+    const res = await fetch(url, { headers:{ "User-Agent":"RouteBuilder/1.0" } });
+    if(!res.ok) throw new Error("RG fail");
+
+    const data = await res.json();
+    return data.address.country || "未知地区";
+  }catch(e){
+    console.warn("反向地理编码失败", e);
+    return "未知地区";
+  }
+}
+// -----------------------------------------------------
+// ★★ 根据轨迹点数组 trackPoints 取得中点坐标（用于国家识别）
+// -----------------------------------------------------
+function getTrackCenterFromPoints(){
+  if (!Array.isArray(trackPoints) || trackPoints.length === 0) return null;
+  const mid = trackPoints[Math.floor(trackPoints.length / 2)];
+  return { lat: mid.lat, lon: mid.lon };
+}
+
+// -----------------------------------------------------
+// ★★ 自动提取轨迹名称（优先读取 GPX/KML 内部）
+// -----------------------------------------------------
+function extractTrackName(text, fileName){
+  // ① GPX <name>
+  let g = text.match(/<name>(.*?)<\/name>/i);
+  if (g && g[1] && g[1].trim().length > 0){
+    return g[1].trim();
+  }
+
+  // ② KML <Document><name>
+  let k = text.match(/<Document>[\s\S]*?<name>(.*?)<\/name>/i);
+  if (k && k[1] && k[1].trim().length > 0){
+    return k[1].trim();
+  }
+
+  // ③ fallback：文件名（去扩展名）
+  if (fileName){
+    return fileName.replace(/\.(gpx|kml)$/i, "");
+  }
+
+  return "未命名轨迹";
+}
+
+
+
+// -----------------------------------------------------
+// ★★ 从轨迹 profile 中取得中点坐标（用于国家识别）
+// -----------------------------------------------------
+function getTrackCenter(profile){
+  if (!Array.isArray(profile) || profile.length === 0){
+    return null;
+  }
+  const mid = profile[Math.floor(profile.length / 2)];
+  return { lat: mid.lat, lon: mid.lon };
+}
+
+
+
+//-----------------------------------------------------
+// 小工具：坐标 → OSM 地图链接
+//-----------------------------------------------------
+function mapUrl(p){
+  return `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lon}&zoom=14`;
+}
+function fmtCoord(p){ return `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`; }
+
+//-----------------------------------------------------
+// Step1：解析 GPX / KML
+//-----------------------------------------------------
+function parseTrack(){
+  const file=document.getElementById("fileInput").files[0];
+  // 自动提取轨迹名称（无扩展名）
+const baseName = file.name.replace(/\.(gpx|kml)$/i,"");
+document.getElementById("routeName").textContent = "轨迹名称：" + baseName;
+
+  if(!file){ alert("请上传 GPX/KML 文件"); return; }
+
+  const reader=new FileReader();
+  reader.onload = async e => {
+  const text = e.target.result;
+
+  // ★ 自动提取轨迹名称（内部 <name> 优先）
+  const fileName = file.name;
+  const displayName = extractTrackName(text, fileName);
+  document.getElementById("routeName").textContent = "轨迹名称：" + displayName;
+
+// ★ 开始解析轨迹
+parseKMLorGPX(text);
+
+// ★ Level-1：基础清洗（你原来的 postProcessTrack）
+postProcessTrack();
+
+
+// ★ 给预览地图准备数据（注意转换为 [lat, lon]）
+const rawSource = (Array.isArray(rawTrackPoints) && rawTrackPoints.length)
+  ? rawTrackPoints        // 有备份就用原始
+  : trackPoints;          // 否则退化为清洗结果
+
+  window.G1_RAW_TRACK   = rawSource.map(p   => [p.lat, p.lon]);
+  window.G1_CLEAN_TRACK = trackPoints.map(p => [p.lat, p.lon]);
+  window.G1_L2_TRACK    = null;           // 每次重新解析都清空 L2 缓存
+
+  // 默认使用 Level-1 清洗轨迹
+  previewCleanedTrack(window.G1_CLEAN_TRACK);
+  setActiveTrackMode("l1");
+
+
+
+
+
+
+// ★ 清洗完成后再根据轨迹中点反查国家（不会影响任何逻辑）
+const center = getTrackCenterFromPoints();
+if (center){
+  const country = await reverseGeocode(center.lat, center.lon);
+  const box = document.getElementById("countryName");  
+  if (box){
+    box.textContent = "国家/地区：" + country;
+  }
+}
+
+
+  // ★ 原本的显示逻辑完全保留
+  showMeta();
+  document.getElementById("g1").innerHTML="";
+  document.getElementById("g2").innerHTML="";
+  document.getElementById("scenes").innerHTML="";
+  g1Segments=[];
+  weatherZones=[];
+};
+
+  reader.readAsText(file);
+}
+
+function parseKMLorGPX(text){
+  trackPoints=[];
+  totalDist=0; ascent=0; descent=0;
+  minEle=Infinity; maxEle=-Infinity;
+
+  const xml=new DOMParser().parseFromString(text,"application/xml");
+
+  // GPX 优先
+  let pts=[...xml.getElementsByTagName("trkpt")];
+  if(pts.length>0){
+    let cum=0;
+    pts.forEach((pt,i)=>{
+      const lat=parseFloat(pt.getAttribute("lat"));
+      const lon=parseFloat(pt.getAttribute("lon"));
+      const eleNode=pt.getElementsByTagName("ele")[0];
+      const ele=eleNode?parseFloat(eleNode.textContent):0;
+      const timeNode=pt.getElementsByTagName("time")[0];
+      const time=timeNode?new Date(timeNode.textContent):null;
+
+      if(i>0){
+        const prev=trackPoints[i-1];
+        const d=dist(prev.lat,prev.lon,lat,lon);
+        cum+=d;
+        totalDist+=d;
+        const gain=ele-prev.ele;
+        if(gain>0) ascent+=gain; else descent+=(-gain);
+      }
+      if(ele<minEle)minEle=ele;
+      if(ele>maxEle)maxEle=ele;
+      trackPoints.push({lat,lon,ele,cumDist:cum,time});
+    });
+    return;
+  }
+
+  // KML <coordinates>
+  const coords=xml.getElementsByTagName("coordinates");
+  let arr=[];
+  for(let c of coords){
+    const lines=c.textContent.trim().split(/\s+/);
+    for(let ln of lines){
+      const sp=ln.split(",");
+      if(sp.length>=2){
+        arr.push({
+          lon:parseFloat(sp[0]),
+          lat:parseFloat(sp[1]),
+          ele:sp[2]?parseFloat(sp[2]):0
+        });
+      }
+    }
+  }
+  let cum=0;
+  for(let i=0;i<arr.length;i++){
+    const p=arr[i];
+    if(i>0){
+      const prev=trackPoints[i-1];
+      const d=dist(prev.lat,prev.lon,p.lat,p.lon);
+      cum+=d;
+      totalDist+=d;
+      const gain=p.ele-prev.ele;
+      if(gain>0) ascent+=gain; else descent+=(-gain);
+    }
+    if(p.ele<minEle)minEle=p.ele;
+    if(p.ele>maxEle)maxEle=p.ele;
+    trackPoints.push({lat:p.lat,lon:p.lon,ele:p.ele,cumDist:cum,time:null});
+  }
+  window.trackPoints = trackPoints;
+}
+//-----------------------------------------------------
+// 轨迹清洗总入口：保存原始轨迹 + 去尖刺 + 重新统计
+//-----------------------------------------------------
+//-----------------------------------------------------
+// 轨迹清洗总入口：保存原始轨迹 + 去尖刺 + 海拔平滑 + 重新统计
+//-----------------------------------------------------
+function postProcessTrack() {
+  if (!Array.isArray(trackPoints) || trackPoints.length < 2) {
+    return;
+  }
+
+  // 1）备份原始点
+  rawTrackPoints = trackPoints.map(p => ({ ...p }));
+
+  // 2）执行清洗（尖刺过滤）
+  const result = cleanTrack(rawTrackPoints);
+
+  // 3）轻度平滑（MA 3 点）
+  result.points = smoothElevationMA(result.points);
+
+  // 重新统计（因为平滑后的 ele 变了）
+  const finalStats = recomputeStats(result.points);
+
+  // 4）回写到全局
+  trackPoints = finalStats.points;
+  totalDist   = finalStats.totalDist;
+  ascent      = finalStats.ascent;
+  descent     = finalStats.descent;
+  minEle      = finalStats.minEle;
+  maxEle      = finalStats.maxEle;
+
+  // 额外保存一份 Level-1 清洗后的原始对象
+  l1TrackPoints = finalStats.points.map(p => ({ ...p }));
+
+  // 5）给 UI 用的差异数据
+  window._cleanReport = {
+    before: rawTrackPoints.length,
+    after: finalStats.points.length,
+    removed: rawTrackPoints.length - finalStats.points.length
+  };
+
+  console.log("✅ 轨迹清洗完成：原始点", window._cleanReport.before, 
+              "→ 清洗后", window._cleanReport.after);
+           // =====================================================
+  // ⭐ 最终权威统计结果 → 写回全局（供 export 使用）
+  // =====================================================
+  let _dist = 0;
+  let _asc = 0;
+  let _desc = 0;
+  let _minEle = null;
+  let _maxEle = null;
+
+  for (let i = 1; i < trackPoints.length; i++) {
+    const p0 = trackPoints[i - 1];
+    const p1 = trackPoints[i];
+
+    const d = dist(p0.lat, p0.lon, p1.lat, p1.lon);
+    _dist += d;
+
+    const gain = p1.ele - p0.ele;
+    if (gain > 0) _asc += gain;
+    else _desc += -gain;
+
+    if (_minEle === null || p1.ele < _minEle) _minEle = p1.ele;
+    if (_maxEle === null || p1.ele > _maxEle) _maxEle = p1.ele;
+  }
+
+  // 👉 写回全局，作为唯一可信统计源
+  window.totalDist = _dist;
+  window.ascent    = _asc;
+  window.descent   = _desc;
+  window.minEle    = _minEle;
+  window.maxEle    = _maxEle;
+  window.trackPoints = trackPoints;     
+}
+
+
+//-----------------------------------------------------
+// 核心清洗算法：去掉 GPS 飘点 / 瞬移尖刺，并重新计算统计
+//-----------------------------------------------------
+function cleanTrack(rawPoints) {
+  if (!Array.isArray(rawPoints) || rawPoints.length < 2) {
+    return {
+      points: rawPoints.slice(),
+      totalDist: totalDist,
+      ascent: ascent,
+      descent: descent,
+      minEle: minEle,
+      maxEle: maxEle
+    };
+  }
+
+  // 允许的最大速度（m/s）和最大单段跳跃（m）
+  // 对于徒步来说，> 12 m/s (~43 km/h) 基本不可能
+  const MAX_SPEED = 12;
+  const MAX_JUMP  = 200;
+
+  const cleaned = [];
+  cleaned.push({ ...rawPoints[0] });
+
+  for (let i = 1; i < rawPoints.length; i++) {
+    const prev = cleaned[cleaned.length - 1];
+    const cur  = rawPoints[i];
+
+    const d = dist(prev.lat, prev.lon, cur.lat, cur.lon); // m
+
+    let ok = true;
+
+    // 1）距离特别大的跳跃，直接认定为飘点
+    if (d > MAX_JUMP) {
+      ok = false;
+    }
+
+    // 2）如果有时间戳，算一下速度，太快也认为是异常
+    if (ok && prev.time && cur.time && cur.time instanceof Date && prev.time instanceof Date) {
+      const dtSec = (cur.time - prev.time) / 1000;
+      if (dtSec > 0) {
+        const v = d / dtSec; // m/s
+        if (v > MAX_SPEED) {
+          ok = false;
+        }
+      }
+    }
+
+    if (ok) {
+      cleaned.push({ ...cur });
+    } else {
+      // 仅做记录，不打扰 UI
+      console.log("⚠️ 移除异常点（飘点/瞬移）:", {
+        index: i,
+        lat: cur.lat,
+        lon: cur.lon,
+        distFromPrev: d.toFixed(1)
+      });
+    }
+  }
+
+  // 至少需要 2 个点
+  if (cleaned.length < 2) {
+    // 防御：如果全被删光了，就退回原始
+    return {
+      points: rawPoints.slice(),
+      totalDist: totalDist,
+      ascent: ascent,
+      descent: descent,
+      minEle: minEle,
+      maxEle: maxEle
+    };
+  }
+
+  // 重新计算 cumDist / totalDist / ascent / descent / minEle / maxEle
+  let cum = 0;
+  let tDist = 0;
+  let asc = 0;
+  let desc = 0;
+  let minE = Infinity;
+  let maxE = -Infinity;
+
+  cleaned[0].cumDist = 0;
+
+  for (let i = 1; i < cleaned.length; i++) {
+    const prev = cleaned[i - 1];
+    const cur  = cleaned[i];
+
+    const d = dist(prev.lat, prev.lon, cur.lat, cur.lon);
+    cum += d;
+    tDist += d;
+
+    const gain = cur.ele - prev.ele;
+    if (gain > 0) asc += gain;
+    else          desc += (-gain);
+
+    cur.cumDist = cum;
+  }
+
+  cleaned.forEach(p => {
+    if (p.ele < minE) minE = p.ele;
+    if (p.ele > maxE) maxE = p.ele;
+  });
+
+  return {
+    points: cleaned,
+    totalDist: tDist,
+    ascent: asc,
+    descent: desc,
+    minEle: minE,
+    maxEle: maxE
+  };
+}
+//-----------------------------------------------------
+// 轻度海拔平滑：移动平均 MA (3-point)
+//-----------------------------------------------------
+function smoothElevationMA(points) {
+  if (points.length < 3) return points;
+
+  const out = points.map(p => ({ ...p })); // clone
+
+  for (let i = 1; i < points.length - 1; i++) {
+    out[i].ele = (
+      points[i - 1].ele +
+      points[i].ele +
+      points[i + 1].ele
+    ) / 3;
+  }
+
+  return out;
+}
+//-----------------------------------------------------
+// 平滑后重新统计距离/海拔累积
+//-----------------------------------------------------
+function recomputeStats(points) {
+  let cum = 0, asc = 0, desc = 0;
+  let minE = Infinity, maxE = -Infinity;
+
+  const out = [];
+  out.push({ ...points[0], cumDist: 0 });
+
+  for (let i = 1; i < points.length; i++) {
+    const prev = out[i - 1];
+    const cur = points[i];
+
+    const d = dist(prev.lat, prev.lon, cur.lat, cur.lon);
+    cum += d;
+
+    const gain = cur.ele - prev.ele;
+    if (gain > 0) asc += gain;
+    else          desc += (-gain);
+
+    out.push({ ...cur, cumDist: cum });
+
+    if (cur.ele < minE) minE = cur.ele;
+    if (cur.ele > maxE) maxE = cur.ele;
+  }
+
+  return {
+    points: out,
+    totalDist: cum,
+    ascent: asc,
+    descent: desc,
+    minEle: minE,
+    maxEle: maxE
+  };
+}
+
+//-----------------------------------------------------
+// 基本信息
+//-----------------------------------------------------
+function showMeta(){
+  if(trackPoints.length<2){
+    document.getElementById("meta").textContent="轨迹点过少，无法分析。";
+    return;
+  }
+  const kmTotal=totalDist/1000;
+  const asc=Math.round(ascent);
+  const desc=Math.round(descent);
+  const start=trackPoints[0];
+  const end=trackPoints[trackPoints.length-1];
+
+  let durationText="未知（缺少时间戳）";
+  const withTime=trackPoints.filter(p=>p.time);
+  if(withTime.length>=2){
+    const t0=withTime[0].time;
+    const t1=withTime[withTime.length-1].time;
+    const h=(t1-t0)/3600000;
+    if(h>0) durationText=h.toFixed(2)+" h";
+  }
+
+  const startLink = mapUrl(start);
+  const endLink   = mapUrl(end);
+
+  document.getElementById("meta").innerHTML=
+`轨迹点数：${trackPoints.length}
+总距离：${kmTotal.toFixed(2)} km
+累计上升：${asc} m
+累计下降：${desc} m
+最低海拔：${Math.round(minEle)} m
+最高海拔：${Math.round(maxEle)} m
+起点坐标：${fmtCoord(start)}
+终点坐标：${fmtCoord(end)}
+记录时长（若轨迹带时间）：${durationText}
+
+起点地图：<a href="${startLink}" target="_blank">在地图中查看</a>
+终点地图：<a href="${endLink}" target="_blank">在地图中查看</a>`;
+}
+// 显示清洗差异
+if (window._cleanReport) {
+  box.innerHTML += `
+    <br>原始点数：${window._cleanReport.before}
+    <br>清洗后点数：${window._cleanReport.after}
+    <br>移除异常点：${window._cleanReport.removed}
+  `;
+}
+
+//-----------------------------------------------------
+// km → 插值
+//-----------------------------------------------------
+function interpKm(km){
+  const target=km*1000;
+  if(target<=0) return trackPoints[0];
+  if(target>=totalDist) return trackPoints[trackPoints.length-1];
+
+  for(let i=1;i<trackPoints.length;i++){
+    const prev=trackPoints[i-1];
+    const cur =trackPoints[i];
+    if(cur.cumDist>=target){
+      const span=cur.cumDist-prev.cumDist || 1;
+      const r=(target-prev.cumDist)/span;
+      return {
+        lat: prev.lat + r*(cur.lat-prev.lat),
+        lon: prev.lon + r*(cur.lon-prev.lon),
+        ele: prev.ele + r*(cur.ele-prev.ele),
+        cumDist: target
+      };
+    }
+  }
+  return trackPoints[trackPoints.length-1];
+}
+
+
+//-----------------------------------------------------
+// 外部数据：OSM 周边道路与设施（已关闭 OSM 请求）
+//-----------------------------------------------------
+async function queryOSMContext(lat, lon) {
+  // 不进行任何外部 API 调用，避免 429 / 504 报错
+  console.log("OSM 查询已关闭：queryOSMContext 返回 null");
+  return null;
+}
+
+//-----------------------------------------------------
+// 外部数据：Wikidata 文化 / 地名（已关闭外部查询）
+//-----------------------------------------------------
+async function queryWikidataContext(lat, lon) {
+  console.log("Wikidata 查询已关闭：queryWikidataContext 返回 []");
+  return [];
+}
+
+
+//-----------------------------------------------------
+// 从 OSM JSON 中提取路面 / 设施摘要
+//-----------------------------------------------------
+function summarizeOSM(data) {
+  if (!data) {
+    return {
+      surface: "自然山路 / 路面信息未知",
+      facilities: []
+    };
+  }
+  const elements = data.elements || [];
+  let surface = null;
+  const facilities = [];
+
+  for (const el of elements) {
+    if (el.type === "way" && el.tags) {
+      if (!surface && el.tags.surface) {
+        surface = el.tags.surface;
+      }
+    }
+    if (el.type === "node" && el.tags) {
+      const t = el.tags;
+      if (t.tourism || t.amenity) {
+        const name = t.name || t.tourism || t.amenity;
+        facilities.push(name);
+      }
+    }
+  }
+
+  let surfaceText = "自然山路 / 混合路面";
+  if (surface) {
+    if (surface.includes("gravel")) surfaceText = "碎石路面（gravel）";
+    else if (surface.includes("rock")) surfaceText = "岩石路面";
+    else if (surface.includes("paved")) surfaceText = "硬化路面";
+    else if (surface.includes("dirt") || surface.includes("ground")) surfaceText = "土路路面";
+    else surfaceText = "路面：" + surface;
+  }
+
+  return {
+    surface: surfaceText,
+    facilities
+  };
+}
+
+//-----------------------------------------------------
+// 分类工具：海拔带 + 坡度 + 地貌文字
+//-----------------------------------------------------
+function altBandLabel(ele){
+  if(ele < 800)   return "河谷 / 丘陵地带：农田、牧场或灌丛＋阔叶林为主";
+  if(ele < 1600)  return "山地林缘：针阔混交林、峡谷森林或山谷草坡";
+  if(ele < 2600)  return "高山草甸：矮灌丛＋草甸，树线附近的开阔坡面";
+  if(ele < 3600)  return "高山碎石坡：稀疏植被＋碎石/岩坡，接近雪线区域";
+  return "极高山裸岩 / 冰雪区：多为裸岩、冰雪覆盖，植被极少";
+}
+
+function classifySlope(deltaEle, distKm){
+  if(distKm<=0) return {label:"坡度未知", pct:0};
+  const pct=(deltaEle/(distKm*1000))*100;
+  let label;
+  if(pct>=15)        label="陡升长坡";
+  else if(pct>=8)   label="持续爬升段";
+  else if(pct>=3)   label="缓升坡 / 台阶状上升";
+  else if(pct>-3)   label="近乎平缓的小起伏";
+  else if(pct>-8)   label="缓降坡";
+  else if(pct>-15)  label="中等下坡";
+  else              label="陡降坡 / 下切谷地";
+  return {label,pct:Math.round(pct*10)/10};
+}
+
+// 海拔 + 坡度 → 场景化地貌描述
+function geomorphDesc(meanEle, slopeLabel){
+  if(meanEle < 800){
+    if(slopeLabel.includes("陡降")) return "下切山谷或峡谷边缘小路";
+    if(slopeLabel.includes("陡升")) return "丘陵上坡，可能是土路或台阶登高";
+    return "河谷/丘陵地带，起伏不大，视野随开阔/树木变化";
+  }
+  if(meanEle < 1600){
+    if(slopeLabel.includes("持续爬升")) return "山地森林或峡谷中持续上升路段";
+    if(slopeLabel.includes("陡降")) return "林中下坡，可能碎石/树根路，要注意脚下";
+    return "山地林缘、森林小径，坡度温和，穿行于树林与视野间";
+  }
+  if(meanEle < 2600){
+    if(slopeLabel.includes("持续爬升")) return "高山草甸向上爬升，视野渐开，风更明显";
+    if(slopeLabel.includes("陡降")) return "高山草甸或矮灌中的下降段，视野开阔但需注意膝盖压力";
+    return "高山草甸 / 矮灌坡面，视野较开阔，周围多为草甸与低矮植物";
+  }
+  if(meanEle < 3600){
+    if(slopeLabel.includes("持续爬升")) return "碎石坡或岩坡攀升，海拔较高，步伐需稳";
+    if(slopeLabel.includes("陡降")) return "高山碎石/岩坡下降段，坡度较大，注意落石与站位";
+    return "高山碎石带，岩石突出，植被稀疏，环境偏粗犷";
+  }
+  if(slopeLabel.includes("持续爬升")) return "接近雪线或冰雪区的攀升路段，环境严酷";
+  if(slopeLabel.includes("陡降")) return "冰雪/裸岩高处的下降段，需要高度专注与防滑";
+  return "极高山裸岩或冰雪区域，植被极少，天气与路况都偏极端";
+}
+
+///-----------------------------------------------------
+// 对单个 G 段做扩展分析（已关闭 OSM / Wikidata）
+//-----------------------------------------------------
+async function analyzeSegmentExt(seg){
+  
+  // 保留原来你真正需要的：植被带模型
+  const vegetation = altBandLabel(seg.midPt ? seg.midPt.ele : 0);
+
+  // 根据 G 段坡度得出的风险（不依赖 OSM）
+  const hazards = [];
+  if (Math.abs(seg.slopePct) >= 25) {
+    hazards.push("陡坡风险（坡度 ≥25%）");
+  }
+  if (seg.slopeLabel && seg.slopeLabel.includes("陡降")) {
+    hazards.push("下坡膝盖压力大，需控制速度");
+  }
+
+  return {
+    vegetation,
+    surface: "自然山路 / 路面信息未知",
+    hazards: hazards.length ? hazards.join("；") : "暂无明显危险特征（仍需根据现场情况判断）",
+    culture: "附近无明显文化/地名条目",
+    facilities: [],
+    sources: {
+      osm: "外部查询已关闭",
+      wikidata: "外部查询已关闭",
+      model: "海拔带模型 + 坡度阈值（25%）"
+    },
+    formulas: [
+      "坡度 = Δh / Δs × 100%",
+      "危险判定：|坡度| ≥25% → 陡坡风险",
+      "植被带：按海拔分带（河谷/山地林缘/高山草甸/碎石带/冰雪带）"
+    ]
+  };
+}
+
+
+//-----------------------------------------------------
+// G1 当日天气（最终优化版）
+// 温度：全部四舍五入为整数
+// summary：简称 + 温度区间（如 “多云｜-3–1℃”）
+//-----------------------------------------------------
+async function fetchDailyWeather(lat, lon, dateStr){
+  const url =
+    `https://api.open-meteo.com/v1/forecast` +
+    `?latitude=${lat}&longitude=${lon}` +
+    `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max` +
+    `&current_weather=true&timezone=auto&start_date=${dateStr}&end_date=${dateStr}`;
+
+  const res = await fetch(url);
+  if(!res.ok) throw new Error("天气接口请求失败");
+
+  const data = await res.json();
+  const code = data.daily.weathercode[0];
+  const wx   = dailyWeatherText(code);
+
+  return {
+    code,
+    fullText: wx.full,
+    short: wx.short,
+
+    tmin: Math.round(data.daily.temperature_2m_min[0]),
+    tmax: Math.round(data.daily.temperature_2m_max[0]),
+
+    pop: data.daily.precipitation_probability_max[0],
+    uv: Number(data.daily.uv_index_max[0].toFixed(1)),
+    wind: Math.round(data.current_weather ? data.current_weather.windspeed : 3),
+
+    // ★★★ 关键：模型海拔基准（Open-Meteo 网格地表高度）
+    modelElevation: data.elevation ?? 0
+  };
+}
+
+
+
+//-----------------------------------------------------
+// weathercode → 中文描述（full + short）
+//-----------------------------------------------------
+function dailyWeatherText(code){
+  switch(code){
+    case 0:  return { full:"晴朗，基本无云", short:"晴" };
+    case 1:  return { full:"以晴为主，偶有少量云", short:"晴间多云" };
+    case 2:  return { full:"多云，间有阳光", short:"多云" };
+    case 3:  return { full:"阴天为主", short:"阴" };
+
+    case 45:
+    case 48: return { full:"有雾或雾凇", short:"雾" };
+
+    case 51:
+    case 53:
+    case 55: return { full:"小雨或毛毛雨", short:"小雨" };
+
+    case 61:
+    case 63:
+    case 65: return { full:"中到明显降雨", short:"中雨" };
+
+    case 66:
+    case 67: return { full:"冻雨或冰粒", short:"冻雨" };
+
+    case 71:
+    case 73:
+    case 75: return { full:"小到中雪", short:"小雪" };
+
+    case 77: return { full:"雪粒 / 雪阵", short:"阵雪" };
+
+    // ★ 这里修正：每个 case 后面都用冒号，不要逗号
+    case 80:
+    case 81:
+    case 82: return { full:"阵性降雨", short:"阵雨" };
+
+    case 85:
+    case 86: return { full:"阵性降雪", short:"阵雪" };
+
+    case 95:
+    case 96:
+    case 97:
+    case 98:
+    case 99:
+      return { full:"雷阵雨或伴冰雹的强对流", short:"雷阵雨" };
+
+    default:
+      return { full:"天气情况不明", short:"不明" };
+  }
+}
+
+
+
+//-----------------------------------------------------
+// 天气关键点（终极 UI 版）
+//-----------------------------------------------------
+async function buildWeatherKeyPoints(dateStr){
+  const kmTotal = totalDist / 1000;
+  const start   = trackPoints[0];
+  const end     = trackPoints[trackPoints.length-1];
+
+  // 最高点
+  let highest = trackPoints.reduce((a,b)=> a.ele > b.ele ? a : b);
+
+  const halfKm  = kmTotal / 2;
+  const quarter = kmTotal / 4;
+  const threeQ  = kmTotal * 3 / 4;
+
+  const p25  = interpKm(quarter);
+  const p50  = interpKm(halfKm);
+  const p75  = interpKm(threeQ);
+  const highKm = highest.cumDist / 1000;
+
+  const candidates = [
+    { label:"起点", km:0, p:start },
+    { label:"前半程中点", km:quarter, p:p25, cond:(kmTotal>10) },
+    { label:"路线中点", km:halfKm,   p:p50 },
+    { label:"后半程中点", km:threeQ, p:p75, cond:(kmTotal>10) },
+    { label:"最高点", km:highKm, p:highest },
+    { label:"终点", km:kmTotal, p:end }
+  ];
+
+  let points = candidates.filter(c => c.cond === undefined || c.cond);
+  points.sort((a,b)=> a.km - b.km);
+
+  const weatherCache = {};
+  const coordKey = (lat,lon)=> `${lat.toFixed(4)},${lon.toFixed(4)}`;
+
+  const zones = [];
+  const lapse = 6.5;  // 标准递减率 ℃/km
+
+    // ……上面代码保留不动……
+
+  for (let i=0; i<points.length; i++){
+    const c   = points[i];
+    const lat = c.p.lat;
+    const lon = c.p.lon;
+    const ele = c.p.ele;
+
+    const key = coordKey(lat,lon);
+    let w = weatherCache[key];
+    if(!w){
+      w = await fetchDailyWeather(lat,lon,dateStr);
+      weatherCache[key] = w;
+    }
+
+    // ★★★ 正确的山区气温修正（核心）
+    const modelEle = w.modelElevation;        // 模型网格海拔
+    const deltaEle = ele - modelEle;          // 实际海拔差
+    const adjTmin  = Math.round(w.tmin - lapse*(deltaEle/1000));
+    const adjTmax  = Math.round(w.tmax - lapse*(deltaEle/1000));
+
+    // 白天体感温度
+    const midT = Math.round((adjTmin + adjTmax)/2);
+    const feel = Math.round(midT - 0.3 * w.wind);
+
+    const frost = adjTmin <= 0 ? " | 清晨可能出现霜冻" : "";
+
+    const desc =
+      `海拔约 ${Math.round(ele)} m，白天体感温度约 ${feel}℃，` +
+      `${w.fullText}，风力 ${w.wind} m/s，降水概率 ${w.pop}%｜紫外线 ${w.uv}${frost}`;
+
+    // ★★★ 标准化后的天气节点（源头定义）
+    const summaryParts = [];
+    // 顺序：天气｜平均气温｜风｜降水｜UV｜体感（体感最后）
+    if (w.short)      summaryParts.push(w.short);
+    summaryParts.push(`${midT}°`);
+    summaryParts.push(`${w.wind}m/s`);
+    summaryParts.push(`${w.pop}%`);
+    summaryParts.push(`UV ${w.uv}`);
+    summaryParts.push(`体感 ${feel}°`);
+
+    zones.push({
+      id: `Z${i+1}`,
+      label: c.label,
+      km: c.km,
+      ele,
+      lat,
+      lon,
+
+      // ====== 1）客户端 / 编辑器核心字段（以后统一用这几个） ======
+      wxShort: w.short,            // "晴" / "多云" / "小雪"
+      tMin: adjTmin,               // ℃，整型
+      tMax: adjTmax,               // ℃，整型
+      midT,                        // 中间值，用于一目了然温度
+      windNum: w.wind,             // 风速 m/s（数值）
+      popPct: w.pop,               // 降水概率 %
+      uvIndex: w.uv,               // 紫外线指数
+      feelNum: feel,               // 体感温度 ℃
+
+      // ====== 2）文本辅助字段（兼容旧逻辑） ======
+      // 标题里用的温度区间
+      temp: `${adjTmin}–${adjTmax}℃`,
+      // 短标题：天气 + 温度区间（给 G1 报告用）
+      shortName: `${w.short}｜${adjTmin}–${adjTmax}℃`,
+      // 简短描述（给手机 / 编辑器用，体感在最后）
+      summary: summaryParts.join(" | "),
+      // 详细描述（G1 报告用，长文本）
+      desc,
+      info: `降水概率 ${w.pop}%｜紫外线 ${w.uv}`,
+      algo: `使用关键点“${c.label}”的坐标调用 Open-Meteo 预报；按标准递减率修正温度，并使用白天气温与风速估算体感温度。`,
+
+      // ====== 3）保留原始天气数据，方便未来扩展 ======
+      raw: {
+        apiCode: w.code,
+        modelElevation: w.modelElevation,
+        originalTmin: w.tmin,
+        originalTmax: w.tmax
+      }
+    });
+  }
+
+  return zones;
+}
+
+
+//------------------------------------------------------
+// ★ 必须补回的工具函数（缺它们就会报错）
+//------------------------------------------------------
+function fmtKm(km){
+  if (km === undefined || km === null) return "-";
+  return km.toFixed(2);
+}
+
+function fmtCoord(pt, label="查看"){
+  if (!pt || pt.lat == null || pt.lon == null) return "-";
+  const url = `https://www.google.com/maps?q=${pt.lat},${pt.lon}`;
+  return `<a href="${url}" target="_blank">${label}</a>`;
+}
+
+function fmtEle(ele){
+  if (ele === undefined || ele === null) return "-";
+  return `${ele.toFixed(0)} m`;
+}
+// 将 naturalSplit 得到的地貌段做二次合并，过滤“噪声段”
+function mergeGeomSegments(segments) {
+  const MIN_LEN_KM   = 0.15; // 150m 以下不单独成段
+  const MIN_ELEV_DIFF = 30;  // 海拔变化 <30m 且很短时视为噪声
+
+  if (!segments || segments.length === 0) return [];
+
+  const merged = [];
+
+  segments.forEach(seg => {
+    // 复制一份，避免意外修改原对象
+    const cur = {
+      startKm: seg.startKm,
+      endKm:   seg.endKm,
+      startPt: seg.startPt,
+      endPt:   seg.endPt,
+      type:    seg.type
+    };
+
+    const lenKm = cur.endKm - cur.startKm;
+    const elevDiff = Math.abs(cur.endPt.ele - cur.startPt.ele);
+
+    if (merged.length === 0) {
+      merged.push(cur);
+      return;
+    }
+
+    const last = merged[merged.length - 1];
+
+    // 规则 1：如果这个段 <150m 且海拔变化 <30m，则合并到前一段
+    if (lenKm < MIN_LEN_KM && elevDiff < MIN_ELEV_DIFF) {
+      last.endKm = cur.endKm;
+      last.endPt = cur.endPt;
+      return;
+    }
+
+    // 规则 2：类型完全一样，也直接合并，避免同类型连续小段
+    if (cur.type === last.type) {
+      last.endKm = cur.endKm;
+      last.endPt = cur.endPt;
+      return;
+    }
+
+    // 其它情况：保留为新的一个自然段
+    merged.push(cur);
+  });
+
+  return merged;
+}
+
+//-----------------------------------------------------
+// Step2：G1 报告
+//-----------------------------------------------------
+async function buildG1(){
+  if(trackPoints.length<2){ alert("请先解析轨迹"); return; }
+
+  const dateInput = document.getElementById("dateInput").value;
+  const date      = dateInput || "（未填写）";
+
+  const kmTotal=totalDist/1000;
+  const start=trackPoints[0];
+  const end=trackPoints[trackPoints.length-1];
+
+  const progressContainer=document.getElementById("progressContainer");
+  const progressBar=document.getElementById("progressBar");
+  const progressText=document.getElementById("progressText");
+  progressContainer.style.display="block";
+  progressBar.style.width="0%";
+  progressText.textContent="开始生成 G1 段落…";
+
+    // 2. 地形自然分段：TopoSeg v2（坡度 + 合并短段）
+  const terrainSegments = topoSeg20(trackPoints);
+
+  g1Segments = terrainSegments.map((seg, i) => {
+    const sKm = seg.startKm;
+    const eKm = seg.endKm;
+    const distKm = Math.max(0.001, eKm - sKm);
+    const pS = seg.startPt;
+    const pE = seg.endPt;
+    const deltaEle = pE.ele - pS.ele;
+    const slope = classifySlope(deltaEle, distKm);
+    const meanEle = (pS.ele + pE.ele) / 2;
+    const band = altBandLabel(meanEle);
+    const geom = geomorphDesc(meanEle, slope.label);
+
+    return {
+      id:        `G${i+1}`,
+      startKm:   sKm,
+      endKm:     eKm,
+      deltaEle:  Math.round(deltaEle),
+      slopePct:  slope.pct,
+
+      // 这两个是给 2.1 表格用的字段
+      slopeClass:  seg.slopeClass,    // ← 来自 topoSeg20 里的 slopeClass
+      description: seg.description,   // ← topoSeg20 里拼出来的 desc
+
+      // 下面是你原来就有的字段
+      slopeLabel: seg.type,           // 供场景标题用
+      altBand:    band,
+      geom:       geom,
+      startPt:    pS,
+      endPt:      pE
+    };
+  });
+
+
+  // 扩展信息：逐段调用外部数据，并更新进度条
+  for (let i=0;i<g1Segments.length;i++) {
+    const seg = g1Segments[i];
+    try {
+      seg.ext = await analyzeSegmentExt(seg);
+    } catch (e) {
+      console.warn("G 段扩展分析失败", seg.id, e);
+      seg.ext = null;
+    }
+    const pct = Math.round(((i+1)/g1Segments.length)*100);
+    progressBar.style.width=pct+"%";
+    progressText.textContent=`G1 分段扩展分析：${i+1}/${g1Segments.length} （${pct}%）`;
+  }
+
+    // 3. 植被分段：按 altBand 文本合并 —— 写回到全局 vegSeg
+  vegSeg = [];
+  let cur = null;
+
+  g1Segments.forEach((s, idx) => {
+    if (!cur) {
+      cur = {
+        id:      "V1",
+        startKm: s.startKm,
+        endKm:   s.endKm,
+        label:   s.altBand
+      };
+    } else if (cur.label === s.altBand) {
+      // 同一植被带，继续延长
+      cur.endKm = s.endKm;
+    } else {
+      // 换植被带，收前一段，起一段新的
+      vegSeg.push(cur);
+      cur = {
+        id:      `V${vegSeg.length + 1}`,
+        startKm: s.startKm,
+        endKm:   s.endKm,
+        label:   s.altBand
+      };
+    }
+
+    // 最后一段别忘了推入
+    if (idx === g1Segments.length - 1 && cur) {
+      vegSeg.push(cur);
+    }
+  });
+
+
+  // 结构型关键点（示例设施）
+  let highest=trackPoints[0];
+  trackPoints.forEach(p=>{ if(p.ele>highest.ele) highest=p; });
+  const highKm=highest.cumDist/1000;
+  const midKm =kmTotal/2;
+  const facilities=[
+    {id:"F1",name:"起点 / 停车或登记点（需与实际地图对照确认）",km:0},
+    {id:"F2",name:"路线中点附近休息/观察区（自动推算）",km:midKm},
+    {id:"F3",name:"线路最高点附近观景/通过点（自动推算）",km:highKm},
+    {id:"F4",name:"终点 / 主要观景或回程节点（需与实际地图对照确认）",km:kmTotal}
+  ];
+// ========= 0b：当日天气概要（新版，完全可覆盖） =========
+let weatherBlock = "";
+let dailyW = null;
+
+if (dateInput) {
+  try {
+    // 选择整条路线“中点”作为代表天气点
+    const mid = interpKm(kmTotal / 2);
+    const w   = await fetchDailyWeather(mid.lat, mid.lon, dateInput);
+    dailyW    = w;
+
+    // ★ 正确山区温度修正：使用模型海拔作为基准
+    const lapse    = 6.5;                      // ℃ / km 标准垂直递减率
+    const modelEle = w.modelElevation ?? 0;     // Open-Meteo 提供的网格地表海拔
+    const deltaEle = mid.ele - modelEle;        // 实际海拔差
+
+    const adjTmin = Math.round(w.tmin - lapse * (deltaEle / 1000));
+    const adjTmax = Math.round(w.tmax - lapse * (deltaEle / 1000));
+
+    // 白天气温中位数 → 体感温度
+    const midT = Math.round((adjTmin + adjTmax) / 2);
+    const windUsed = Math.min(Math.max(w.wind, 0), 15);
+    const feel = Math.round(midT - 0.3 * windUsed);
+
+    // ★ 新版 0b 显示格式：天气主题＋区间温度
+    //   去除“基础天气”、去除所有括号说明
+    weatherBlock = `
+<h3>0b. 当日天气（G1 必选项｜整条路线概要）</h3>
+<table>
+  <tr><th>项目</th><th>数值</th></tr>
+  <tr><td>天气</td><td>${w.short}｜${adjTmin}–${adjTmax}℃</td></tr>
+  <tr><td>降水概率</td><td>${w.pop}%</td></tr>
+  <tr><td>紫外线指数</td><td>${w.uv}</td></tr>
+  <tr><td>风速</td><td>${w.wind} m/s</td></tr>
+  <tr><td>白天体感温度</td><td>${feel}℃</td></tr>
+</table>
+
+<div class="note">
+数据来源：Open-Meteo 免费天气 API（逐日预报 + 当前风速）。<br>
+温度修正：根据 Open-Meteo 模型网格海拔，按标准大气递减率 6.5℃/km 修正至该中点实际海拔。<br>
+体感温度：基于白天气温与风速的简化风寒估算，用于徒步体感预判。
+</div>
+`;
+
+  } catch (e) {
+    console.warn(e);
+    weatherBlock = `
+<h3>0b. 当日天气（G1 必选项｜整条路线概要）</h3>
+<p>尝试从 Open-Meteo 获取 ${dateInput} 的天气失败，关键点天气无法生成。</p>`;
+  }
+
+} else {
+  weatherBlock = `
+<h3>0b. 当日天气（G1 必选项｜整条路线概要）</h3>
+<p>未填写具体出发日期，无法生成天气数据。填写日期后重新生成 G1。</p>`;
+}
+
+  // 关键点天气
+  if(dateInput){
+    try{
+      weatherZones = await buildWeatherKeyPoints(dateInput);
+    }catch(e){
+      console.warn(e);
+      weatherZones = [];
+    }
+  }else{
+    weatherZones = [];
+  }
+
+  // ---------- HTML 输出 ----------
+  let html=`
+<h3>0. 日期与季节判定</h3>
+<p>出发日期：${date}</p>
+${weatherBlock}
+
+<h3>1. 轨迹基础信息</h3>
+<table>
+<tr><th>项目</th><th>数值</th></tr>
+<tr><td>轨迹点数</td><td>${trackPoints.length}</td></tr>
+<tr><td>总距离</td><td>${kmTotal.toFixed(2)} km</td></tr>
+<tr><td>累计上升</td><td>${Math.round(ascent)} m</td></tr>
+<tr><td>累计下降</td><td>${Math.round(descent)} m</td></tr>
+<tr><td>最低海拔</td><td>${Math.round(minEle)} m</td></tr>
+<tr><td>最高海拔</td><td>${Math.round(maxEle)} m</td></tr>
+<tr><td>起点坐标</td><td>${fmtCoord(start)} ｜ <a href="${mapUrl(start)}" target="_blank">地图</a></td></tr>
+<tr><td>终点坐标</td><td>${fmtCoord(end)} ｜ <a href="${mapUrl(end)}" target="_blank">地图</a></td></tr>
+</table>
+`;
+
+  // 2.1 地形分段
+  html+=`
+<h3>2.1 地形自然分段（坡度 + 海拔区间）</h3>
+<table>
+<tr>
+  <th>编号</th>
+  <th>里程区间</th>
+  <th>海拔区间</th>
+  <th>简称</th>
+  <th>描述</th>
+  <th>起点</th>
+  <th>终点</th>
+  <th>算法 / 来源</th>
+</tr>`;
+
+  g1Segments.forEach(s=>{
+const startEle = Math.round(s.startPt.ele);
+const endEle = Math.round(s.endPt.ele);
+const eleRangeText = `${startEle}–${endEle} m`;
+
+// 使用 full type（含 坡 / 路 后缀）
+// 使用 full type（例如：缓上坡 / 平缓路）
+const shortLabel = s.type ?? s.slopeClass ?? "未知";
+const descText = s.description ?? "";
+
+
+
+    html+=`
+<tr>
+  <td>${s.id}</td>
+  <td>${s.startKm.toFixed(2)}–${s.endKm.toFixed(2)} km</td>
+  <td>${eleRangeText}</td>
+  <td>${shortLabel}</td>
+  <td>${descText}</td>
+  <td>${fmtCoord(s.startPt)}<br><a href="${mapUrl(s.startPt)}" target="_blank">地图</a></td>
+  <td>${fmtCoord(s.endPt)}<br><a href="${mapUrl(s.endPt)}" target="_blank">地图</a></td>
+  <td>
+    本段地形基于国际常用徒步/地貌坡度标准：
+· 平缓：坡度 |5%| 以下（人体难以感知）
+· 缓上 / 缓下：5%～10%
+· 中上 / 中下：10%～20%
+· 陡上 / 陡下：20%～35%
+· 极陡上 / 极陡下：>35%
+自然分段低于 30 米的短段自动合并
+数据来源：轨迹累积距离 + 海拔变化（GPX/KML 原始数据）
+  </td>
+</tr>`;
+  });
+
+  html+=`</table>`;
+
+   // ================================
+  // 2.2 地貌分段（独立自然分段）
+  // ================================
+  html += `<h3>2.2 地貌分段（按坡度 + 海拔带的自然分段）</h3>`;
+  html += `<p>说明：本表基于<strong>原始轨迹逐点</strong>计算坡度与海拔，
+    使用地貌规则 <code>getLandformType</code> 对每一点进行分类，
+    然后将<strong>地貌类型相同且连续</strong>的区间自动合并为自然分段。
+    因此本表的段数不再跟 2.1 的地形分段一一对应。</p>`;
+
+  html += `<table><thead>
+    <tr>
+      <th>编号</th>
+      <th>里程区间</th>
+      <th>海拔区间</th>
+      <th>简称</th>
+      <th>描述</th>
+      <th>起点</th>
+      <th>终点</th>
+      <th>算法 / 来源</th>
+    </tr>
+  </thead><tbody>`;
+
+  // 利用 naturalSplit + getLandformType 做独立地貌分段
+const rawGeomSegments = naturalSplit(trackPoints, (pt, idx) => {
+  if (idx === 0) return getLandformType(null, pt);
+  return getLandformType(trackPoints[idx - 1], pt);
+});
+
+// ★ 新增：对结果做一次“稳定合并”
+const geomSegments = mergeGeomSegments(rawGeomSegments);
+
+geomSegments.forEach((seg, idx) => {
+  // seg.type 形如 “河谷 / 丘陵地带：农田、牧场为主”
+  let shortLabel = seg.type;
+  let desc = "";
+  const colonIdx = seg.type.indexOf("：");
+  if (colonIdx !== -1) {
+    shortLabel = seg.type.slice(0, colonIdx);
+    desc       = seg.type.slice(colonIdx + 1);
+  }
+
+  const eleMin = Math.min(seg.startPt.ele, seg.endPt.ele);
+  const eleMax = Math.max(seg.startPt.ele, seg.endPt.ele);
+
+  html += `<tr>
+    <td>G${idx+1}</td>
+    <td>${fmtKm(seg.startKm)}–${fmtKm(seg.endKm)} km</td>
+    <td>${eleMin.toFixed(0)}–${eleMax.toFixed(0)} m</td>
+    <td>${shortLabel}</td>
+    <td>${desc}</td>
+    <td>${fmtCoord(seg.startPt, "地图")}</td>
+    <td>${fmtCoord(seg.endPt, "地图")}</td>
+    <td>依据：逐点海拔 + 坡度的地貌类型判断；数据来源：轨迹点海拔与坡度统计。</td>
+  </tr>`;
+});
+
+
+
+  // 2.3 植被分段
+  html+=`
+<h3>2.3 植被分段（按海拔 + 地貌合并）</h3>
+<table>
+<tr>
+  <th>编号</th>
+  <th>里程区间</th>
+  <th>海拔区间</th>
+  <th>简称</th>
+  <th>描述</th>
+  <th>起点</th>
+  <th>终点</th>
+  <th>算法 / 来源</th>
+</tr>`;
+
+  vegSeg.forEach(v=>{
+    const pS = interpKm(v.startKm);
+    const pE = interpKm(v.endKm);
+    const startEle = Math.round(pS.ele);
+    const endEle = Math.round(pE.ele);
+    const eleRangeText = `${startEle}–${endEle} m`;
+    const shortLabel = v.label;
+    const descText = `该区间植被与环境风格以 ${v.label} 为主`;
+
+    html+=`
+<tr>
+  <td>${v.id}</td>
+  <td>${v.startKm.toFixed(2)}–${v.endKm.toFixed(2)} km</td>
+  <td>${eleRangeText}</td>
+  <td>${shortLabel}</td>
+  <td>${descText}</td>
+  <td>${fmtCoord(pS)}<br><a href="${mapUrl(pS)}" target="_blank">地图</a></td>
+  <td>${fmtCoord(pE)}<br><a href="${mapUrl(pE)}" target="_blank">地图</a></td>
+  <td>
+    依据：将 G1 各段的海拔带描述按相邻相同文本自动合并。<br>
+    数据来源：轨迹点海拔（GPX/KML） → 海拔带模型 altBandLabel()。<br>
+    适用：判断一路上植被和环境风格的变化节奏。
+  </td>
+</tr>`;
+  });
+
+  html+=`</table>`;
+
+  // 3. 路面与通行条件
+  html+=`
+<h3>3. 路面与通行条件</h3>
+<table>
+<tr>
+  <th>编号</th>
+  <th>里程区间</th>
+  <th>海拔区间</th>
+  <th>简称</th>
+  <th>描述</th>
+  <th>起点</th>
+  <th>终点</th>
+  <th>算法 / 来源</th>
+</tr>`;
+
+  g1Segments.forEach(s=>{
+    const ext = s.ext || {};
+    const startEle = Math.round(s.startPt.ele);
+    const endEle = Math.round(s.endPt.ele);
+    const eleRangeText = `${startEle}–${endEle} m`;
+    const shortLabel = ext.surface || "自然山路 / 路面信息不足";
+    const descText = `危险提示：${ext.hazards || "暂无明显危险特征"}`;
+
+    html+=`
+<tr>
+  <td>${s.id}</td>
+  <td>${s.startKm.toFixed(2)}–${s.endKm.toFixed(2)} km</td>
+  <td>${eleRangeText}</td>
+  <td>${shortLabel}</td>
+  <td>${descText}</td>
+  <td>${fmtCoord(s.startPt)}<br><a href="${mapUrl(s.startPt)}" target="_blank">地图</a></td>
+  <td>${fmtCoord(s.endPt)}<br><a href="${mapUrl(s.endPt)}" target="_blank">地图</a></td>
+  <td>
+    路面信息优先来自 OSM 的 surface / highway 标签（Overpass API 200m 半径检索）。<br>
+    若无明确标签，则按“自然山路 / 混合路面”处理，仅做体验提示。<br>
+    危险提示依据：坡度阈值（|坡度|≥25%）、OSM trail_visibility=bad 等。<br>
+    数据来源：OpenStreetMap + 轨迹坡度计算。
+  </td>
+</tr>`;
+  });
+
+  html+=`</table>`;
+
+  // 4. 设施分布
+  html+=`
+<h3>4. 设施分布（人造服务与安全设施）</h3>
+<table>
+<tr>
+  <th>编号</th>
+  <th>里程区间</th>
+  <th>海拔区间</th>
+  <th>简称</th>
+  <th>描述</th>
+  <th>起点</th>
+  <th>终点</th>
+  <th>算法 / 来源</th>
+</tr>`;
+
+  g1Segments.forEach(s=>{
+    const ext = s.ext || {};
+    const fac = ext.facilities || [];
+    const facText = fac.length ? fac.slice(0,3).join("、") + (fac.length>3?" 等":"") : "附近未检出明确设施（或 OSM 未收录）";
+    const startEle = Math.round(s.startPt.ele);
+    const endEle = Math.round(s.endPt.ele);
+    const eleRangeText = `${startEle}–${endEle} m`;
+    const shortLabel = fac.length ? fac[0] : "设施信息有限";
+    const descText = facText;
+
+    html+=`
+<tr>
+  <td>${s.id}</td>
+  <td>${s.startKm.toFixed(2)}–${s.endKm.toFixed(2)} km</td>
+  <td>${eleRangeText}</td>
+  <td>${shortLabel}</td>
+  <td>${descText}</td>
+  <td>${fmtCoord(s.startPt)}<br><a href="${mapUrl(s.startPt)}" target="_blank">地图</a></td>
+  <td>${fmtCoord(s.endPt)}<br><a href="${mapUrl(s.endPt)}" target="_blank">地图</a></td>
+  <td>
+    在每个 G 段中点附近 200m 范围内，通过 OSM Overpass 检索 tourism/amenity 节点。<br>
+    仅展示前 3 个名称作为摘要，具体位置需在地图上二次确认。<br>
+    数据来源：OpenStreetMap POI；实际现场设施可能晚于或早于 OSM 数据更新。
+  </td>
+</tr>`;
+  });
+
+  html+=`</table>`;
+
+  // 5. 景观与文化要素
+  html+=`
+<h3>5. 景观与文化要素</h3>
+<table>
+<tr>
+  <th>编号</th>
+  <th>里程区间</th>
+  <th>海拔区间</th>
+  <th>简称</th>
+  <th>描述</th>
+  <th>起点</th>
+  <th>终点</th>
+  <th>算法 / 来源</th>
+</tr>`;
+
+  g1Segments.forEach(s=>{
+    const ext = s.ext || {};
+    const culture = ext.culture || "附近无明显文化/地名条目";
+    const startEle = Math.round(s.startPt.ele);
+    const endEle = Math.round(s.endPt.ele);
+    const eleRangeText = `${startEle}–${endEle} m`;
+    const shortLabel = culture.split("、")[0];
+    const descText = culture;
+
+    html+=`
+<tr>
+  <td>${s.id}</td>
+  <td>${s.startKm.toFixed(2)}–${s.endKm.toFixed(2)} km</td>
+  <td>${eleRangeText}</td>
+  <td>${shortLabel}</td>
+  <td>${descText}</td>
+  <td>${fmtCoord(s.startPt)}<br><a href="${mapUrl(s.startPt)}" target="_blank">地图</a></td>
+  <td>${fmtCoord(s.endPt)}<br><a href="${mapUrl(s.endPt)}" target="_blank">地图</a></td>
+  <td>
+    通过 Wikidata SPARQL 以 G 段中点为圆心，1km 半径内检索最近的地理实体名称（山峰、湖泊、景区、定居点等）。<br>
+    这些名称用于提示可能的景观/文化信息，具体故事与解读仍需领队结合历史资料与现场体验补充。<br>
+    数据来源：Wikidata + 坐标反向地理查询；部分偏远地区可能无返回数据。
+  </td>
+</tr>`;
+  });
+
+  html+=`</table>`;
+
+  // 7. 当天天气关键点
+  html+=`
+<h3>7. 当天天气关键点（Z1–Z${weatherZones.length || 0}）</h3>`;
+
+  if (weatherZones.length === 0) {
+    html += `<p>由于未能获取当日天气或未填写出发日期，本节暂无法生成实际关键点天气，仅保留结构说明。</p>`;
+  } else {
+    html += `
+<table>
+<tr>
+  <th>编号</th>
+  <th>里程区间</th>
+  <th>海拔区间</th>
+  <th>温度（简称）</th>
+  <th>描述（体感温度 + 其他数据）</th>
+  <th>起点</th>
+  <th>终点</th>
+  <th>算法 / 来源</th>
+</tr>`;
+
+    weatherZones.forEach(z => {
+      const kmText = `${z.km.toFixed(2)}–${z.km.toFixed(2)} km`;
+      const eleText = `${Math.round(z.ele)}–${Math.round(z.ele)} m`;
+      const coordObj = { lat: z.lat, lon: z.lon };
+      const coordText = fmtCoord(coordObj);
+      const mapLink = mapUrl(coordObj);
+
+      const tempShort = z.temp;
+      const feelAndOthers = `体感 ${z.feel}｜风 ${z.wind}｜${z.info}`;
+
+      html += `
+<tr>
+  <td>${z.id}</td>
+  <td>${kmText}</td>
+  <td>${eleText}</td>
+  <td>${tempShort}</td>
+  <td>${feelAndOthers}</td>
+  <td>${coordText}<br><a href="${mapLink}" target="_blank">地图</a></td>
+  <td>${coordText}<br><a href="${mapLink}" target="_blank">地图</a></td>
+  <td>
+    ${z.algo}<br>
+    数据来源：Open-Meteo 天气 API（当日逐日预报 + 当前风速）＋ 轨迹海拔 / 距离；<br>
+    温度按标准大气递减率（约 6.5℃/km）修正至该点海拔，仅用于徒步体感预估。
+  </td>
+</tr>`;
+    });
+
+    html += `</table>`;
+  }
+
+  html+=`
+<div class="note">
+说明：天气关键点按“起点 / 前半程中点 / 中点 / 后半程中点 / 最高点 / 终点”规则自动选点；<br>
+每个点独立调用天气接口并按该点海拔修正体感温度，用于给领队做装备与节奏判断参考。
+</div>
+`;
+
+  // ---------- 把结果写入 unified7 ----------
+  unified7 = {
+    weather: weatherZones,
+
+    geomorph: naturalSplit(trackPoints, (pt,idx)=>{
+      return idx>0 ? getTerrainType(trackPoints[idx-1], pt) : "start";
+    }).map((s,i)=>({
+      id:"T"+(i+1),
+      startKm:s.startKm,
+      endKm:s.endKm,
+      label:s.type,
+      desc:s.type,
+      startPt:s.startPt,
+      endPt:s.endPt,
+      source:"自然分段：坡度阈值"
+    })),
+
+    geomorphology: naturalSplit(trackPoints, (pt,idx)=>{
+      return idx>0 ? getLandformType(trackPoints[idx-1], pt) : "start";
+    }).map((s,i)=>({
+      id:"GEO"+(i+1),
+      startKm:s.startKm,
+      endKm:s.endKm,
+      label:s.type,
+      desc:s.type,
+      startPt:s.startPt,
+      endPt:s.endPt,
+      source:"自然分段：地貌模型"
+    })),
+
+    vegetation: naturalSplit(trackPoints, getVegetationType).map((s,i)=>({
+      id:"V"+(i+1),
+      startKm:s.startKm,
+      endKm:s.endKm,
+      label:s.type,
+      desc:s.type,
+      startPt:s.startPt,
+      endPt:s.endPt,
+      source:"自然分段：海拔带模型"
+    })),
+
+    surface: naturalSplit(trackPoints, getSurfaceType).map((s,i)=>({
+      id:"SFC"+(i+1),
+      startKm:s.startKm,
+      endKm:s.endKm,
+      label:s.type,
+      desc:s.type,
+      startPt:s.startPt,
+      endPt:s.endPt,
+      source:"自然分段：OSM surface"
+    })),
+
+    facility: splitFacilities(trackPoints),
+    culture:  splitCultural(trackPoints),
+    summary:[]
+  };
+
+  document.getElementById("g1").innerHTML=html;
+  progressText.textContent+="｜完成";
+  updateG1Export();
+
+}
+
+
+//-----------------------------------------------------
+// ⭐ 正确的 G1 JSON 输出：必须在 buildG1() 执行完之后生成
+//-----------------------------------------------------
+function updateG1Export() {
+
+    window.G1_EXPORT = {
+        // 1）整条线路的剖面（保留原来的 profile）
+        profile: trackPoints.map(p => ({
+    km: +(p.cumDist / 1000).toFixed(3),
+    ele: p.ele,
+    lat: p.lat,
+    lon: p.lon
+})),
+
+        // 2）地形自然分段 S 段 —— 包含你要求的所有字段
+        segments: g1Segments.map((s, i) => ({
+            // 段号：统一用 S1、S2…（也可以改成 s.id，看你前端习惯）
+            id: `S${i + 1}`,
+
+            // 里程区间
+            startKm: +s.startKm.toFixed(3),
+            endKm:   +s.endKm.toFixed(3),
+
+            // 海拔区间
+            startEle: Math.round(s.startPt.ele),
+            endEle:   Math.round(s.endPt.ele),
+
+            // 地形简称 & 描述（来自 TopoSeg20）
+            type: s.slopeClass,       // 例如 “缓上 / 中下 / 极陡下…”
+            desc: s.description,      // “持续 xxx m｜高差 ±xx m｜斜率 x.x%｜坡度 x.x°”
+
+            // 方便后续使用的数值（可以不给前端用，但保留没坏处）
+            deltaEle: s.deltaEle,
+            slopePct: s.slopePct,
+
+            // 起点 / 终点（带经纬度，可直接拿去做地图链接）
+            startPt: {
+                lat: s.startPt.lat,
+                lon: s.startPt.lon,
+                ele: s.startPt.ele
+            },
+            endPt: {
+                lat: s.endPt.lat,
+                lon: s.endPt.lon,
+                ele: s.endPt.ele
+            }
+        })),
+
+                  // 3）天气关键点（统一源头字段）
+    weatherNodes: (weatherZones || []).map((z, i) => ({
+        id:   z.id || `W${i + 1}`,
+        km:   +z.km.toFixed(3),
+        lat:  z.lat,
+        lon:  z.lon,
+
+        // ---- 标准字段：客户端 & 编辑器都只认这一套 ----
+        weather: z.wxShort || "",                          // 天气主题：晴 / 多云 / 小雪…
+        tMin:    typeof z.tMin    === "number" ? z.tMin    : null,
+        tMax:    typeof z.tMax    === "number" ? z.tMax    : null,
+        midT:    typeof z.midT    === "number" ? z.midT    : null,
+        wind:    typeof z.windNum === "number" ? z.windNum : null,   // m/s
+        pop:     typeof z.popPct  === "number" ? z.popPct  : null,   // %
+        uv:      typeof z.uvIndex === "number" ? z.uvIndex : null,
+        feel:    typeof z.feelNum === "number" ? z.feelNum : null,   // ℃（体感，最后）
+
+        // ---- 文本字段（给报表 / 编辑器展示用） ----
+        temp:    z.temp || "",            // 区间文本：-2–1℃ 之类
+        shortName: z.shortName || "",     // “晴｜-2–1℃”
+        summary:  z.summary  || "",       // “多云 | 15° | 25m/s | 60% | UV 3.2 | 体感 9°”
+        desc:     z.desc     || "",       // 详细长文
+
+        // ---- 原始数据保底（便于未来扩展逻辑） ----
+        raw: z.raw || null
+    })),
+
+
+
+        // 4）整条线的 meta（保留）
+        meta: {
+            totalKm:   +(trackPoints.at(-1).cumDist / 1000).toFixed(3),
+            startPt:   trackPoints[0],          // 整条线的起点
+            endPt:     trackPoints.at(-1),      // 整条线的终点
+            pointCount: trackPoints.length
+        }
+    };
+  console.log("已更新 G1_EXPORT: ", G1_EXPORT);
+
+  // ★ 最后一步：刷新自然分段 JSON（用于下载 & 编辑器）
+  updateExportJson();
+}
+console.log("🔥 G1_EXPORT:", window.G1_EXPORT);
+
+
+
+// -----------------------------------------------------
+// ★★★★★ 刷新自然分段 JSON —— 下载 JSON & 编辑器读取都靠它
+// -----------------------------------------------------
+function updateExportJson() {
+
+  if (!window.G1_EXPORT) {
+    console.warn("G1_EXPORT 尚未生成，无法刷新 JSON");
+    return;
+  }
+
+  // =============================
+  // 安全兜底：最终权威数据源
+  // =============================
+  const trackPtsSafe = window.trackPoints || [];
+  const g1SegSafe    = window.g1Segments || [];
+  const vegSafe      = window.vegSeg || [];
+  const facSafe      = window.facilities || [];
+  const weatherSafe  = window.weatherZones || [];
+
+  // =============================
+  // ⭐ 兜底重新统计（只用于 meta）
+  // 不影响任何既有逻辑
+  // =============================
+  let _dist = 0;
+  let _asc = 0;
+  let _desc = 0;
+  let _minEle = null;
+  let _maxEle = null;
+
+  for (let i = 1; i < trackPtsSafe.length; i++) {
+    const p0 = trackPtsSafe[i - 1];
+    const p1 = trackPtsSafe[i];
+
+    const d = dist(p0.lat, p0.lon, p1.lat, p1.lon);
+    _dist += d;
+
+    const gain = p1.ele - p0.ele;
+    if (gain > 0) _asc += gain;
+    else _desc += -gain;
+
+    if (_minEle === null || p1.ele < _minEle) _minEle = p1.ele;
+    if (_maxEle === null || p1.ele > _maxEle) _maxEle = p1.ele;
+  }
+
+  // =============================
+  // 导出 JSON（结构保持不变）
+  // =============================
+  window._G1_EXPORT_JSON = {
+
+    meta: {
+      name: document.getElementById("routeName")?.textContent.replace("轨迹名称：", "") || "",
+      date: document.getElementById("dateInput")?.value || "",
+      distanceKm: Number((_dist / 1000).toFixed(2)),
+      ascent: Number(_asc.toFixed(1)),
+      descent: Number(_desc.toFixed(1)),
+      maxEle: _maxEle,
+      minEle: _minEle
+    },
+
+    trackInfo: {
+      mode: window._currentTrackMode,
+      pointCount: trackPtsSafe.length
+    },
+
+    track: trackPtsSafe.map(p => ({
+      lat: p.lat,
+      lon: p.lon,
+      ele: p.ele,
+      cumDist: p.cumDist
+    })),
+
+    naturalSegments: g1SegSafe.map(s => ({
+      id: s.id,
+      startKm: s.startKm,
+      endKm: s.endKm,
+      deltaEle: s.deltaEle,
+      slopePct: s.slopePct,
+      slopeClass: s.slopeClass,
+      altBand: s.altBand,
+      startPt: s.startPt,
+      endPt: s.endPt,
+      ext: s.ext || null
+    })),
+
+    weather: weatherSafe,
+    vegetation: vegSafe,
+    facilities: facSafe
+  };
+
+  console.log("✨ JSON 已刷新:", window._G1_EXPORT_JSON);
+}
+
+
+
+
+//-----------------------------------------------------
+// Step3：G2 动态结构（按小时 × 当天预报）
+//-----------------------------------------------------
+async function buildG2(){
+  if(trackPoints.length<2){ alert("请先解析轨迹"); return; }
+  const dateStr=document.getElementById("dateInput").value;
+  if(!dateStr){
+    alert("G2 需要具体出发日期（用于查询当天逐小时天气）");
+    return;
+  }
+
+  const kmTotal=totalDist/1000;
+
+  let hours;
+  const withTime=trackPoints.filter(p=>p.time);
+  if(withTime.length>=2){
+    const t0=withTime[0].time;
+    const t1=withTime[withTime.length-1].time;
+    hours=(t1-t0)/3600000;
+  }
+  if(!hours || hours<=0){
+    const avgSpeed=3.0;
+    hours=kmTotal/avgSpeed;
+  }
+  const slotCount=Math.max(1,Math.ceil(hours));
+  const slotKm=kmTotal/slotCount;
+
+  const midIdx=Math.floor(trackPoints.length/2);
+  const lat=trackPoints[midIdx].lat;
+  const lon=trackPoints[midIdx].lon;
+
+  let weatherData=null;
+  let note="";
+
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,apparent_temperature,precipitation,wind_speed_10m&timezone=auto&start_date=${dateStr}&end_date=${dateStr}`;
+    const res=await fetch(url);
+    if(res.ok){
+      weatherData=await res.json();
+      note="天气数据来源：Open-Meteo 免费天气 API（逐小时预报）。";
+    }else{
+      note="未能成功获取 Open-Meteo 数据，以下为结构示例（不含真实天气值）。";
+    }
+  }catch(e){
+    note="网络错误或无法访问 Open-Meteo，以下为结构示例（不含真实天气值）。";
+  }
+
+  const times = weatherData && weatherData.hourly && weatherData.hourly.time ? weatherData.hourly.time : [];
+  const temp  = weatherData && weatherData.hourly ? weatherData.hourly.temperature_2m : [];
+  const app   = weatherData && weatherData.hourly ? weatherData.hourly.apparent_temperature : [];
+  const prec  = weatherData && weatherData.hourly ? weatherData.hourly.precipitation : [];
+  const wind  = weatherData && weatherData.hourly ? weatherData.hourly.wind_speed_10m : [];
+
+  let html=`
+<h3>2. 分区 × 小时天气结构</h3>
+<p>${note}</p>
+<p>出发日期：${dateStr}；预计总时长 ≈ ${hours.toFixed(1)} 小时，划分为 ${slotCount} 个小时段。</p>
+<table>
+<tr>
+  <th>时间段</th><th>对应本地时间</th><th>公里区间</th><th>中点海拔</th>
+  <th>气温（℃）</th><th>体感温度（℃）</th><th>风速（m/s）</th><th>降水（mm）</th>
+</tr>`;
+
+  for(let i=0;i<slotCount;i++){
+    const sKm=slotKm*i;
+    const eKm=(i===slotCount-1)?kmTotal:slotKm*(i+1);
+    const midKm=(sKm+eKm)/2;
+    const pMid=interpKm(midKm);
+    let timeLabel="—", tVal="—", appVal="—", wVal="—", pVal="—";
+
+    if(times.length>0 && i<times.length){
+      timeLabel=times[i].replace("T"," ");
+      if(typeof temp[i]!=="undefined") tVal=temp[i];
+      if(typeof app[i]!=="undefined")  appVal=app[i];
+      if(typeof wind[i]!=="undefined") wVal=wind[i];
+      if(typeof prec[i]!=="undefined") pVal=prec[i];
+    }
+
+    html+=`
+<tr>
+  <td>T+${i}h ~ T+${i+1}h</td>
+  <td>${timeLabel}</td>
+  <td>${sKm.toFixed(2)}–${eKm.toFixed(2)} km</td>
+  <td>${Math.round(pMid.ele)} m</td>
+  <td>${tVal}</td>
+  <td>${appVal}</td>
+  <td>${wVal}</td>
+  <td>${pVal}</td>
+</tr>`;
+  }
+
+  html+=`</table>
+<div class="note">
+说明：G2 使用 Open-Meteo 提供的逐小时预报（气温、体感温度、风速、降水），坐标为整条线路的中点。<br>
+路线内不同海拔的气候差异，请结合 G1 中的关键点天气理解。
+</div>
+`;
+  document.getElementById("g2").innerHTML=html;
+}
+
+//-----------------------------------------------------
+// NEW：统一段落生成（S 段 + 7 大类写实段落）
+//-----------------------------------------------------
+function buildUnifiedSegmentsFinal() {
+  if (!trackPoints || trackPoints.length < 2) return [];
+
+  const bp = computeRouteBreakpoints(trackPoints);   // 3段或5段
+  const emptySegs = buildEmptyUnifiedSegments(bp);   // S1-S3 / S1-S5
+
+  emptySegs.forEach(seg => {
+    const s = seg.startPt.cumDist / 1000;
+    const e = seg.endPt.cumDist / 1000;
+    seg.startKm = s;
+    seg.endKm = e;
+  });
+
+  const final = emptySegs.map(seg => {
+    const Sstart = seg.startKm;
+    const Send   = seg.endKm;
+
+    const geom = unified7.geomorph.find(g => g.startKm <= Sstart && g.endKm >= Send);
+    const veg  = unified7.vegetation.find(v => v.startKm <= Sstart && v.endKm >= Send);
+    const surf = unified7.surface.find(s => s.startKm <= Sstart && s.endKm >= Send);
+    const cult = unified7.culture.find(c => c.startKm <= Sstart && c.endKm >= Send);
+
+    const weather = (() => {
+      if (!unified7.weather || unified7.weather.length === 0) return null;
+      let nearest = unified7.weather[0];
+      let minDiff = Math.abs(unified7.weather[0].km - Sstart);
+      unified7.weather.forEach(z => {
+        const d = Math.abs(z.km - Sstart);
+        if (d < minDiff) {
+          minDiff = d;
+          nearest = z;
+        }
+      });
+      return nearest;
+    })();
+
+    return {
+      id: seg.id,
+      startKm: Sstart,
+      endKm: Send,
+      startEle: seg.startPt.ele,
+      endEle: seg.endPt.ele,
+
+      geomorph: geom || null,
+      vegetation: veg || null,
+      surface: surf || null,
+      culture: cult || null,
+      weather: weather,
+
+      source: "Unified7 自动生成（S 段 × 7 类规则）"
+    };
+  });
+
+  window.unified7_scenes = final;
+  return final;
+}
+
+//-----------------------------------------------------
+// Step5：场景段（直接基于 G1）
+//-----------------------------------------------------
+function buildScenes(){
+  if(g1Segments.length===0){
+    alert("请先生成 G1 报告");
+    return;
+  }
+  let html="";
+  g1Segments.forEach((s)=>{
+    const title=`${s.id}｜${s.slopeLabel}`;
+    html+=`
+<div class="scene-box">
+  <h3>${title}</h3>
+  <p>里程：${s.startKm.toFixed(2)}–${s.endKm.toFixed(2)} km</p>
+  <p>高度变化：${s.deltaEle} m（约 ${s.slopePct}%）</p>
+  <p>地貌 / 植被：${s.geom}（${s.altBand}）</p>
+  <p>起点：${fmtCoord(s.startPt)} ｜ <a href="${mapUrl(s.startPt)}" target="_blank">地图</a></p>
+  <p>终点：${fmtCoord(s.endPt)} ｜ <a href="${mapUrl(s.endPt)}" target="_blank">地图</a></p>
+  <p class="note">算法来源：同 G1（坡度 + 海拔带组合），仅作场景节点建议，领队可在后台重命名与补充故事。</p>
+</div>`;
+  });
+  document.getElementById("scenes").innerHTML=html;
+}
+
+//-----------------------------------------------------
+// Step 6：把 unified7_scenes 转成 “节点气泡 JSON”
+//-----------------------------------------------------
+function buildBubbleNodes() {
+  const scenes = window.unified7_scenes;
+  if (!scenes || scenes.length === 0) {
+    alert("请先运行 buildUnifiedSegmentsFinal()");
+    return null;
+  }
+
+  const bubbles = scenes.map(s => {
+    return {
+      id: s.id,
+      startKm: s.startKm,
+      endKm: s.endKm,
+      startEle: s.startEle,
+      endEle: s.endEle,
+
+      weather: s.weather ? {
+        temp: s.weather.temp,
+        humidity: s.weather.humidity,
+        uv: s.weather.uv,
+        feelsLike: s.weather.feelsLike,
+        wind: s.weather.wind,
+        source: "Open-Meteo"
+      } : null,
+
+      geomorph: s.geomorph ? {
+        type: s.geomorph.type,
+        desc: s.geomorph.desc,
+        source: s.geomorph.source || "DEM + 地貌推断"
+      } : null,
+
+      vegetation: s.vegetation ? {
+        zone: s.vegetation.zone,
+        desc: s.vegetation.desc,
+        source: s.vegetation.source || "WWF Ecoregion"
+      } : null,
+
+      surface: s.surface ? {
+        type: s.surface.type,
+        desc: s.surface.desc,
+        source: "OSM Surface"
+      } : null,
+
+      culture: s.culture ? {
+        poi: s.culture.poi,
+        desc: s.culture.desc,
+        source: "Wikidata"
+      } : null,
+
+      summary: s.summary || null,
+      bubbleType: "segment",
+      version: "v1.0"
+    };
+  });
+
+  window.routeBubbles = bubbles;
+  console.log("气泡节点已生成：", bubbles);
+  return bubbles;
+}
+
+//-----------------------------------------------------
+// 全局：自然分段函数 + 若干分类函数
+//-----------------------------------------------------
+function naturalSplit(trackPoints, getType) {
+  if (!trackPoints || trackPoints.length === 0) return [];
+
+  const result = [];
+  let startIdx = 0;
+  let lastType = getType(trackPoints[0], 0);
+
+  for (let i = 1; i < trackPoints.length; i++) {
+    const t = getType(trackPoints[i], i);
+    if (t !== lastType) {
+      const sPt = trackPoints[startIdx];
+      const ePt = trackPoints[i - 1];
+      result.push({
+        type: lastType,
+        startIdx: startIdx,
+        endIdx: i - 1,
+        startPt: sPt,
+        endPt: ePt,
+        startKm: sPt.cumDist / 1000,
+        endKm: ePt.cumDist / 1000
+      });
+      startIdx = i;
+      lastType = t;
+    }
+  }
+
+  const sPt = trackPoints[startIdx];
+  const ePt = trackPoints[trackPoints.length - 1];
+  result.push({
+    type: lastType,
+    startIdx: startIdx,
+    endIdx: trackPoints.length - 1,
+    startPt: sPt,
+    endPt: ePt,
+    startKm: sPt.cumDist / 1000,
+    endKm: ePt.cumDist / 1000
+  });
+
+  return result;
+}
+
+function getTerrainType(prev, pt) {
+  if (!prev) return "未知";
+  const distM = Math.max(1, pt.cumDist - prev.cumDist);
+  const slopePct = (pt.ele - prev.ele) / distM * 100;
+
+  if (slopePct > 15) return "陡上";
+  if (slopePct > 8)  return "持续上";
+  if (slopePct > 3)  return "缓上";
+  if (slopePct > -3) return "平缓";
+  if (slopePct > -8) return "缓下";
+  if (slopePct > -15)return "持续下";
+  return "陡下";
+}
+
+function getVegetationType(pt) {
+  return altBandLabel(pt.ele);
+}
+
+function getLandformType(prev, pt) {
+  if (!prev) return "未知";
+  const distKm = Math.max(0.001, (pt.cumDist - prev.cumDist) / 1000);
+  const delta = pt.ele - prev.ele;
+  const slope = classifySlope(delta, distKm);
+  const meanEle = (pt.ele + prev.ele) / 2;
+  return geomorphDesc(meanEle, slope.label);
+}
+
+function getSurfaceType(pt) {
+  return pt.surfaceType || "未知路面";
+}
+
+function splitFacilities(trackPoints) {
+  const arr = [];
+  for (let i = 0; i < trackPoints.length; i += 80) {
+    arr.push({
+      type: "观景点",
+      km: trackPoints[i].cumDist / 1000,
+      ele: trackPoints[i].ele,
+      hint: "视野良好，可短暂停留"
+    });
+  }
+  return arr;
+}
+
+function splitCultural(trackPoints) {
+  const arr = [];
+  for (let i = 0; i < trackPoints.length; i += 120) {
+    arr.push({
+      type: "文化节点",
+      km: trackPoints[i].cumDist / 1000,
+      ele: trackPoints[i].ele,
+      hint: "可结合当地历史/地理叙事"
+    });
+  }
+  return arr;
+}
+// === 隐藏 2.3～6 所有段落，但保留 2.1、2.2、7 ===
+function hideUnwantedSections() {
+    const g1 = document.getElementById("g1");
+    if (!g1) return;
+
+    const children = [...g1.children];
+    let hide = false;
+
+    children.forEach(el => {
+        if (el.innerText.trim().startsWith("2.3")) hide = true;
+        if (el.innerText.trim().startsWith("7.")) hide = false;
+        if (hide) el.style.display = "none";
+    });
+}
+
+// 在生成 G1 报告后执行隐藏
+const oldBuildG1 = buildG1;
+buildG1 = async function() {
+    await oldBuildG1();
+    hideUnwantedSections();
+};
+</script>   <!-- ←←← 这是你原有 JS 的结束标签，必须保留 -->
+
+<!-- ★ 导出 JSON + 进入编辑器 + 下载 JSON（最终稳定版） -->
+<script>
+/* ============================================================
+   ★ G1 导出、进入编辑器、下载 JSON —— 最终稳定版本
+   ============================================================ */
+
+
+// ==========================
+// 进入人工编辑器（使用 G1_EXPORT）
+// ==========================
+document.getElementById("openEditorBtn").onclick = () => {
+
+  // 必须有 G1_EXPORT 才能进入编辑器
+  if (!window.G1_EXPORT || !G1_EXPORT.profile || !G1_EXPORT.segments) {
+    alert("请先点击『生成自然分段』");
+    return;
+  }
+
+  // —— 老编辑器使用的数据结构 ——（保持你的原设计）
+  localStorage.setItem("G1_FROM_ANALYZER", JSON.stringify({
+  meta:         G1_EXPORT.meta || {},   // ⭐ 关键：把统计数据带过去
+  profile:      G1_EXPORT.profile,
+  segments:     G1_EXPORT.segments,
+  weatherNodes: G1_EXPORT.weatherNodes,
+  manualScenes: G1_EXPORT.manualScenes || []
+}));
+
+  // —— 新结构（自然分段 JSON）如果生成过，则写入 —— 
+  if (window._G1_EXPORT_JSON) {
+    localStorage.setItem("G1_NATURAL_JSON", JSON.stringify(window._G1_EXPORT_JSON));
+  }
+
+  // 跳转编辑器
+  window.location.href = "manual_G1_editor.html";
+};
+
+
+
+// ==========================
+// 下载 JSON（使用 _G1_EXPORT_JSON）
+// ==========================
+document.getElementById("downloadJsonBtn").onclick = () => {
+  if (!window._G1_EXPORT_JSON) {
+    alert("请先生成自然分段");
+    return;
+  }
+
+  const jsonStr = JSON.stringify(window._G1_EXPORT_JSON, null, 2);
+
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "G1_natural_segments.json";  
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+
+
+// ========================
+// 2. Level-2 深度清洗（在 postProcessTrack 之后，用于进一步消除尖刺）
+//    输入：trackPoints（对象数组 {lat,lon,ele,time,...}）
+//    输出：新的 points 数组
+// ========================
+function cleanTrackLevel2(points) {
+  if (!Array.isArray(points) || points.length < 3) return points;
+
+  const MAX_SPEED      = 7.5;   // m/s
+  const MAX_ACCEL      = 3.5;   // m/s²
+  const MAX_DIR_CHANGE = 120;   // 最大转向角
+  const WINDOW         = 5;
+
+  function distance(a, b) {
+    const R    = 6371000;
+    const dLat = (b.lat - a.lat) * Math.PI / 180;
+    const dLon = (b.lon - a.lon) * Math.PI / 180;
+    const lat1 = a.lat * Math.PI / 180;
+    const lat2 = b.lat * Math.PI / 180;
+    const s =
+      Math.sin(dLat/2)**2 +
+      Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(s));
+  }
+
+  function direction(a, b) {
+    const y = Math.sin((b.lon - a.lon) * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180);
+    const x = Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
+              Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*
+              Math.cos((b.lon - a.lon)*Math.PI/180);
+    return Math.atan2(y, x) * 180 / Math.PI;
+  }
+
+  const cleaned = [points[0]];
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const p0 = cleaned[cleaned.length - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+
+    const dt1 = (new Date(p1.time) - new Date(p0.time)) / 1000;
+    const dt2 = (new Date(p2.time) - new Date(p1.time)) / 1000;
+    if (dt1 <= 0 || dt2 <= 0) continue;
+
+    const d1 = distance(p0, p1);
+    const d2 = distance(p1, p2);
+
+    const v1 = d1 / dt1;
+    const v2 = d2 / dt2;
+
+    const dir1 = direction(p0, p1);
+    const dir2 = direction(p1, p2);
+    let dirDiff = Math.abs(dir2 - dir1);
+    if (dirDiff > 180) dirDiff = 360 - dirDiff;
+
+    const accel = (v2 - v1) / dt2;
+
+    if (v1 > MAX_SPEED || v2 > MAX_SPEED) continue;
+    if (accel > MAX_ACCEL) continue;
+    if (dirDiff > MAX_DIR_CHANGE) continue;
+
+    cleaned.push(p1);
+  }
+
+  cleaned.push(points[points.length - 1]);
+
+  // 简单平滑一下（和你之前版本一样）
+  const smoothed = cleaned.map((p, i) => {
+    const start = Math.max(0, i - WINDOW);
+    const end   = Math.min(cleaned.length - 1, i + WINDOW);
+    const slice = cleaned.slice(start, end + 1);
+    return {
+      ...p,
+      lat: slice.reduce((s,v)=>s+v.lat,0)/slice.length,
+      lon: slice.reduce((s,v)=>s+v.lon,0)/slice.length,
+      ele: slice.reduce((s,v)=>s+v.ele,0)/slice.length
+    };
+  });
+
+  return smoothed;
+}
+
+/* ========================
+ * Level-3：深度清洗（极端直线跳点过滤）
+ * ======================== */
+function deepCleanTrack(latlngs) {
+  if (!Array.isArray(latlngs) || latlngs.length < 5) return latlngs;
+
+  function distanceKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const rLat1 = lat1 * Math.PI / 180;
+    const rLat2 = lat2 * Math.PI / 180;
+
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(rLat1) * Math.cos(rLat2) *
+      Math.sin(dLon / 2) ** 2;
+
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  const clean = [latlngs[0]];
+
+  for (let i = 1; i < latlngs.length - 1; i++) {
+    const p0 = clean[clean.length - 1];
+    const p1 = latlngs[i];
+    const p2 = latlngs[i + 1];
+
+    const d01 = distanceKm(p0[0], p0[1], p1[0], p1[1]);
+    const d12 = distanceKm(p1[0], p1[1], p2[0], p2[1]);
+    const d02 = distanceKm(p0[0], p0[1], p2[0], p2[1]);
+
+    if (d02 < d01 + d12 * 1.5) {
+      clean.push(p1);
+    }
+  }
+
+  clean.push(latlngs[latlngs.length - 1]);
+  return clean;
+}
+/* ========================
+ * 根据一组点，更新全局统计（trackPoints + totalDist 等）
+ * ======================== */
+function applyTrackStatsFrom(points){
+  if (!Array.isArray(points) || points.length < 2) return;
+
+  const stats = recomputeStats(points);
+  trackPoints = stats.points;
+  totalDist   = stats.totalDist;
+  ascent      = stats.ascent;
+  descent     = stats.descent;
+  minEle      = stats.minEle;
+  maxEle      = stats.maxEle;
+}
+
+/* ========================
+ * 把 L2 折线（[lat, lon]）转换成带 ele/cumDist 的对象数组
+ * 基于 Level-1 的点做匹配
+ * ======================== */
+function buildL2TrackPoints(){
+  if (!window.G1_L2_TRACK || !window.G1_L2_TRACK.length) return [];
+  if (!Array.isArray(l1TrackPoints) || !l1TrackPoints.length) return [];
+
+  const index = new Map();
+  l1TrackPoints.forEach(p => {
+    const key = `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
+    index.set(key, p);
+  });
+
+  const out = [];
+
+  window.G1_L2_TRACK.forEach(pair => {
+    const lat = pair[0];
+    const lon = pair[1];
+    const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+    const base = index.get(key);
+
+    if (base) {
+      out.push({ ...base });
+    } else {
+      const last = out[out.length - 1];
+      out.push({
+        lat,
+        lon,
+        ele: last ? last.ele : 0,
+        time: null,
+        cumDist: 0
+      });
+    }
+  });
+
+  return out;
+}
+
+/* ========================
+ * 统一切换当前轨迹模式
+ * mode: "raw" | "l1" | "l2"
+ * ======================== */
+function setActiveTrackMode(mode){
+  window._currentTrackMode = mode;
+
+  // 1）按钮高亮
+  const idMap = {
+    raw: "btnShowRaw",
+    l1:  "btnShowL1",
+    l2:  "btnShowL2"
+  };
+  const activeId = idMap[mode];
+
+  ["btnShowRaw","btnShowL1","btnShowL2"].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    if (id === activeId) btn.classList.add("clean-selected");
+    else btn.classList.remove("clean-selected");
+  });
+
+  // 2）切换用于后续分析的轨迹数据
+  if (mode === "raw" && rawTrackPoints.length >= 2) {
+    applyTrackStatsFrom(rawTrackPoints);
+  } else if (mode === "l2" && window.G1_L2_TRACK && window.G1_L2_TRACK.length) {
+    if (!l2TrackPoints.length) {
+      l2TrackPoints = buildL2TrackPoints();
+    }
+    if (l2TrackPoints.length >= 2) {
+      applyTrackStatsFrom(l2TrackPoints);
+    }
+  } else {
+    // 默认用 Level-1
+    if (l1TrackPoints.length >= 2) {
+      applyTrackStatsFrom(l1TrackPoints);
+    }
+  }
+
+  // 3）更新点数显示
+  updatePointStats();
+}
+
+/* 辅助：把当前模式转为中文说明 */
+function getActiveTrackModeText(){
+  const mode = window._currentTrackMode || "l1";
+  if (mode === "raw") return "当前用于后续分析：原始轨迹";
+  if (mode === "l2")  return "当前用于后续分析：Level-2 深度清洗轨迹";
+  return "当前用于后续分析：Level-1 清洗轨迹";
+}
+/* ========================
+ * 点数显示 + 当前轨迹模式
+ * ======================== */
+function updatePointStats() {
+  const box = document.getElementById("pointStats");
+  if (!box) return;
+
+  const raw = window.G1_RAW_TRACK?.length || 0;
+  const l1  = window.G1_CLEAN_TRACK?.length || 0;
+  const l2  = window.G1_L2_TRACK?.length || 0;
+
+  const modeText = getActiveTrackModeText();
+
+  box.innerHTML = `
+    <div style="margin-bottom:4px;"><b>${modeText}</b></div>
+    原始点数：${raw} 个　
+    清洗后点数：${l1} 个　
+    深度清洗点数：${l2} 个
+  `;
+}
+
+
+/* ========================
+ * 轨迹预览地图（统一模式）
+ * ======================== */
+let previewMap = null;
+let previewLineLayer = null;
+
+function initPreviewMap() {
+  if (previewMap) return;
+  previewMap = L.map("trackMap", {
+    zoomControl: false,
+    attributionControl: false
+  }).setView([30,110],4);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19
+  }).addTo(previewMap);
+}
+
+function drawPreviewLine(latlngs, color) {
+  if (!Array.isArray(latlngs) || !latlngs.length) return;
+
+  initPreviewMap();
+
+  if (previewLineLayer) previewMap.removeLayer(previewLineLayer);
+
+  previewLineLayer = L.polyline(latlngs, {
+    color: color,
+    weight: 3,
+    opacity: 0.9
+  }).addTo(previewMap);
+
+  previewMap.fitBounds(previewLineLayer.getBounds(), { padding: [20, 20] });
+}
+
+function previewRawTrack(latlngs)    { drawPreviewLine(latlngs, "#ff3333"); }
+function previewCleanedTrack(latlngs){ drawPreviewLine(latlngs, "#009966"); }
+function previewL2Track(latlngs)     { drawPreviewLine(latlngs, "#0066ff"); }
+
+document.addEventListener("DOMContentLoaded", () => {
+  // ★★★ 默认日期（明天）——加回这一段 ★★★
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const dateInput = document.getElementById("dateInput");
+  if (dateInput) {
+    dateInput.value = d.toISOString().split("T")[0];
+  }
+
+  // 原始轨迹按钮
+  const btnRaw = document.getElementById("btnShowRaw");
+  if (btnRaw) {
+    btnRaw.onclick = () => {
+      if (!window.G1_RAW_TRACK) {
+        alert("原始轨迹未加载");
+        return;
+      }
+      previewRawTrack(window.G1_RAW_TRACK);
+      setActiveTrackMode("raw");
+    };
+  }
+
+  // Level-1 清洗按钮
+  const btnL1 = document.getElementById("btnShowL1");
+  if (btnL1) {
+    btnL1.onclick = () => {
+      if (!window.G1_CLEAN_TRACK) {
+        alert("尚未执行 Level-1 清洗");
+        return;
+      }
+      previewCleanedTrack(window.G1_CLEAN_TRACK);
+      setActiveTrackMode("l1");
+    };
+  }
+
+  // Level-2 深度清洗按钮
+  const btnL2 = document.getElementById("btnShowL2");
+  if (btnL2) {
+    btnL2.onclick = () => {
+      if (!window.G1_CLEAN_TRACK) {
+        alert("请先完成 Level-1 清洗");
+        return;
+      }
+
+      if (!window.G1_L2_TRACK) {
+        // 只做形状深度清洗
+        window.G1_L2_TRACK = deepCleanTrack(window.G1_CLEAN_TRACK);
+      }
+
+      if (!window.G1_L2_TRACK?.length) {
+        alert("Level-2 轨迹为空");
+        return;
+      }
+
+      previewL2Track(window.G1_L2_TRACK);
+      setActiveTrackMode("l2");
+    };
+  }
+});
+
+//-----------------------------------------------------
+// ★★★★★ 最终生成自然分段 JSON（优质轨迹 JSON）
+//-----------------------------------------------------
+function updateExportJson() {
+  window._G1_EXPORT_JSON = {
+    meta: {
+      name: document.getElementById("routeName").textContent.replace("轨迹名称：", ""),
+      date: document.getElementById("dateInput").value,
+      distanceKm: (totalDist / 1000).toFixed(2),
+      ascent,
+      descent,
+      maxEle,
+      minEle
+    },
+
+    // 当前轨迹模式：raw / l1 / l2
+    trackInfo: {
+      mode: window._currentTrackMode,
+      pointCount: trackPoints.length
+    },
+
+    // 轨迹点（干净轨迹）
+    track: trackPoints.map(p => ({
+      lat: p.lat,
+      lon: p.lon,
+      ele: p.ele,
+      cumDist: p.cumDist
+    })),
+
+    // 地形自然段（含 ext）
+    naturalSegments: g1Segments.map(s => ({
+      id: s.id,
+      startKm: s.startKm,
+      endKm: s.endKm,
+      deltaEle: s.deltaEle,
+      slopePct: s.slopePct,
+      slopeClass: s.slopeClass,
+      altBand: s.altBand,
+      geom: s.geom,
+      startPt: { lat: s.startPt.lat, lon: s.startPt.lon, ele: s.startPt.ele },
+      endPt:   { lat: s.endPt.lat,   lon: s.endPt.lon,   ele: s.endPt.ele },
+      ext: s.ext || null
+    })),
+
+    // 天气节点 & 植被段 & 设施（后两者没有就空数组）
+    weather: weatherZones || [],
+    vegetation: vegSeg || [],
+    facilities: facilities || []
+  };
+
+  console.log("⭐⭐ G1 JSON 生成完成 → window._G1_EXPORT_JSON", window._G1_EXPORT_JSON);
+}
+
+
+</script>
+
+</body>
+</html>

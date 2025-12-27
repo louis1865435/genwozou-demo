@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>领队经验 · 跟我走 Hiking With Me</title>
+ <meta name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    /* === 统一底部按钮样式（3 个页面通用）=== */
+
+    .tab-bar{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      padding:8px 16px 14px;
+      display:flex;
+      gap:12px;
+      background:#ffffff;
+      border-top:1px solid #e5e7eb;
+      z-index:999;
+      box-sizing:border-box;
+    }
+
+    .tab-bar .tab-btn,
+    .bottom-tab{
+      flex:1;
+      height:44px;
+      border-radius:999px;
+      border:1px solid #e5e7eb;
+      background:#ffffff;
+      font-size:16px;
+      font-weight:600;
+      color:#111827;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      box-sizing:border-box;
+    }
+
+    .tab-bar .tab-btn.active,
+    .bottom-tab.active{
+      background:#c42020;
+      border-color:#c42020;
+      color:#ffffff;
+    }
+
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    html,body{
+      margin:0;padding:0;height:100%;
+      overflow:hidden;
+      font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+      background:#f4f4f5;color:#111827;
+    }
+    body{display:flex;flex-direction:column;}
+    .page{
+      height:100dvh;
+      max-height:100dvh;
+      width:100%;
+      margin:0 auto;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      padding-bottom:85px; /* 预留底部播放器空间 */
+    }
+    header{display:none;}
+    header .back{
+      width:34px;height:34px;border-radius:17px;border:1px solid #e5e7eb;
+      display:flex;align-items:center;justify-content:center;
+      margin-right:8px;font-size:18px;
+      flex:0 0 auto;
+      cursor:pointer;
+    }
+    header .titles{
+      display:flex;flex-direction:column;overflow:hidden;
+      flex:1 1 auto;
+      min-width:0;
+    }
+    header .titles .main{font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    header .titles .sub{font-size:12px;color:#d1d5db;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .lock-btn{
+      width:32px;height:32px;margin-left:6px;
+      border-radius:16px;
+      border:none;
+      background:#374151;
+      display:flex;align-items:center;justify-content:center;
+      color:#facc15;
+      font-size:18px;
+      flex:0 0 auto;
+      cursor:pointer;
+    }
+
+    .content{
+      flex:1 1 auto;
+      display:flex;
+      flex-direction:column;
+      padding:2px 6px 8px;
+      overflow:hidden;
+    }
+
+    .tab-row{
+      flex:0 0 auto;
+      display:flex;
+      gap:4px;
+      padding:6px 4px 8px;
+      margin-top:-8px;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+    .tab-row::-webkit-scrollbar{display:none;}
+
+    .tab-btn.active{
+      background:#ffffff;
+      border-color:#d61c1c;
+      color:#e11b1b;
+    }
+    .tab-btn.locked{opacity:0.4;}
+
+    .main-row{
+      flex:1 1 auto;
+      display:flex;
+      overflow:hidden;
+      gap:4px;
+      min-height:0;
+    }
+
+    .display-panel{
+      flex:3 1 0%;
+      min-width:70%;
+      border-radius:24px;
+      background:#ffffff;
+      box-shadow:0 6px 18px rgba(0,0,0,.06);
+      padding:2px 2px 10px;   /* 底部多留一点给统计条 */
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .scene-image-wrapper{
+      position:relative;
+      flex:1 1 auto;
+      width:100%;
+      border-radius:8px;
+      overflow:hidden;
+      background:#e5e7eb;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:0;
+    }
+
+    #sceneImage{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+
+    .img-nav{
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%);
+      width:30px;height:30px;
+      border-radius:15px;
+      border:none;
+      background:rgba(0,0,0,.45);
+      color:#f9fafb;
+      font-size:18px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .img-nav.prev{left:8px;}
+    .img-nav.next{right:8px;}
+        /* 显示区右上角全屏按钮 */
+    .fullscreen-btn{
+      position:absolute;
+      top:10px;
+      right:10px;
+      width:30px;
+      height:30px;
+      border-radius:15px;
+      border:none;
+      background:rgba(0,0,0,.45);
+      color:#f9fafb;
+      font-size:18px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+
+    /* 全屏状态下，让显示区底色变黑一点（可选） */
+    #displayPanel:fullscreen{
+      background:#000;
+    }
+
+    /* Safari / 全屏时，按钮固定在屏幕右上角，避免被裁掉 */
+    :fullscreen .fullscreen-btn{
+      position:fixed;
+      top:18px;
+      right:18px;
+    }
+/* ===== 伪全屏状态：guide-fullscreen / panel-fullscreen ===== */
+
+/* body 进“伪全屏”时：铺满高度、隐藏底部 tab 栏 */
+body.guide-fullscreen{
+  background:#000;
+  overflow:hidden;
+}
+
+body.guide-fullscreen .page{
+  height:100vh;
+  max-height:100vh;
+  padding-bottom:0;          /* 不再为底部预留空间 */
+}
+
+body.guide-fullscreen .tab-bar{
+  display:none;              /* 全屏时隐藏底部三个按钮 */
+}
+
+/* 显示区占满屏幕 */
+#displayPanel.panel-fullscreen{
+  position:fixed;
+  inset:0;                   /* 等价于 top:0; right:0; bottom:0; left:0; */
+  margin:0;
+  border-radius:0;
+  z-index:950;
+  padding:8px 8px 56px;      /* 底下留一点给音频条 */
+  background:#000;
+}
+
+#displayPanel.panel-fullscreen .scene-image-wrapper{
+  border-radius:0;
+}
+
+/* 全屏时，让音频条靠屏幕底部 */
+body.guide-fullscreen .audio-bar{
+  bottom:0;
+}
+
+
+    /* 旧 meta-bar 保留，不再使用 */
+    .meta-bar{
+      flex:0 0 auto;
+      margin-top:4px;
+      margin-bottom:2px;
+      display:flex;
+      align-items:center;
+      gap:14px;
+      font-size:10px;
+      color:#111827;
+    }
+
+    .meta-item{
+      display:flex;
+      flex-direction:row;         /* 图标 + 数字一行 */
+      align-items:flex-start;     /* 顶部对齐 */
+      gap:4px;
+      line-height:1;              /* 避免数字下方撑高 */
+    }
+
+    .meta-icon{
+      width:10px;
+      height:10px;
+      border-radius:3px;
+      border:1px solid #6b7280;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:10px;
+    }
+    .meta-icon-page::before{content:"▢";}
+    .meta-icon-audio::before{content:"♪";}
+    .meta-icon-image::before{content:"▦";}
+
+    /* 图片容器内部底部的统计条 */
+    .meta-bottom-bar{
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:0;
+      padding:2px 6px 10px;         /* 上薄下厚：视觉靠上 */
+      display:flex;
+      align-items:flex-start;
+      gap:10px;
+      justify-content:space-between; /* 左右两组分开 */
+      background:rgba(255,255,255,0.8); /* 白色半透明条 */
+      font-size:10px;
+      color:#111827;                   /* 灰黑文字 */
+    }
+
+    /* 右侧素材统计一整组 */
+    .meta-extra{
+      display:flex;
+      flex-direction:row;
+      align-items:flex-start;
+      gap:10px;
+    }
+
+    .meta-bottom-bar span{
+      color:#111827;
+    }
+
+    .scene-caption{
+      flex:0 0 auto;
+      margin-top:3px;
+      font-size:11px;
+      color:#6b7280;
+      text-align:right;
+      min-height:16px;
+      display:none;
+    }
+
+    .scene-list{
+      flex:1 1 0%;
+      max-width:28%;
+      overflow-y:auto;
+      padding-left:2px;
+      padding-bottom:110px;
+      min-width:0;
+    }
+
+    .scene-btn{
+      width:100%;
+      aspect-ratio:1/1;
+      border-radius:14px;
+      border:1px solid #d1d5db;
+      background:#fff;
+      padding:2px;
+      font-size:15px;
+      color:#111;
+      margin-bottom:4px;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      text-align:center;
+      cursor:pointer;
+    }
+    .scene-btn div{
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      text-align:center;
+      line-height:1.2;
+    }
+    .scene-btn span{display:none;}
+    .scene-btn.active{
+      background:#f0caca !important;
+      border-color:#e62d2d !important;
+    }
+    .scene-btn.active *{color:#100f0f !important;}
+    .scene-btn.active div{font-weight:700 !important;}
+    .scene-btn.locked{opacity:0.4;}
+
+    .audio-bar{
+      flex:0 0 auto;
+      margin-top:12px;
+      padding:10px 18px;
+      background:#fff;
+      box-shadow:0 -2px 10px rgba(0,0,0,.12);
+      display:flex;
+      align-items:center;
+      gap:11px;
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:60px;
+      border-radius:0;
+      z-index:1000;
+    }
+    .audio-btn{
+      width:30px;height:30px;
+      border-radius:15px;border:none;
+      background:#111827;color:#fff;
+      font-size:17px;
+      display:flex;align-items:center;justify-content:center;
+      padding:0;
+      flex:0 0 auto;
+      cursor:pointer;
+    }
+    .audio-btn.locked{opacity:0.4;}
+    .time-label{
+      font-size:11px;
+      min-width:64px;
+      text-align:center;
+      flex:0 0 auto;
+    }
+    .progress{
+      flex:1 1 auto;
+      height:4px;border-radius:2px;
+      background:#e5e7eb;position:relative;
+      cursor:pointer;
+      min-width:0;
+      transition:opacity .2s;
+    }
+    .progress-inner{
+      position:absolute;left:0;top:0;bottom:0;
+      width:0;background:#c42020;border-radius:2px;
+    }
+    .speed-btn{
+      padding:0 8px;
+      border-radius:14px;
+      border:1px solid #c42020;
+      background:#fff;
+      color:#c42020;
+      font-size:13px;
+      height:28px;
+      flex:0 0 auto;
+      cursor:pointer;
+    }
+    .speed-btn.locked{opacity:0.4;}
+
+    .skip-icon{
+      position:relative;
+      width:22px;
+      height:22px;
+      border-radius:11px;
+      border:2px solid #fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:11px;
+    }
+    .skip-number{position:relative;z-index:1;}
+    .skip-arrow{
+      position:absolute;
+      width:16px;
+      height:16px;
+      border-radius:8px;
+      border-top:2px solid #fff;
+      border-right:2px solid #fff;
+      top:-4px;
+    }
+    .skip-arrow.left{left:-2px;transform:rotate(-135deg);}
+    .skip-arrow.right{right:-2px;transform:rotate(45deg);}
+    #replayBtn{display:none;}
+
+    input{font-size:16px;}
+
+    /* 底部 Tab 栏统一样式（第二遍，兼容其它页） */
+    .tab-bar{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      display:flex;
+      gap:4px;
+      padding:10px 12px calc(8px + env(safe-area-inset-bottom));
+      background:#f9fafb;
+      box-shadow:0 -2px 6px rgba(0,0,0,0.06);
+      z-index:900;
+    }
+    .tab-btn{
+      font-size:16px !important;
+      padding:6px 12px;
+      border-radius:16px;
+      border:1px solid #ffffff;
+      background:#ffffff;
+      color:#111;
+      font-weight:600;
+      min-width:68px;
+      white-space:nowrap;
+    }
+    .bottom-tab{
+      flex:1;
+      height:44px;
+      border-radius:12px;
+      border:1px solid #e5e5e5;
+      background:#ffffff;
+      color:#333333;
+      font-size:20px;
+      font-weight:600;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .tab-btn-ghost,
+    .bottom-tab{
+      background:#ffffff;
+      color:#333333;
+    }
+    .tab-btn-primary,
+    .bottom-tab.active{
+      border-color:#d62828;
+      background:#d62828;
+      color:#ffffff;
+    }
+html, body {
+  touch-action: manipulation;
+}
+
+  </style>
+  <script src="assets/config/config.js"></script>
+</head>
+
+<script>
+// 强行禁止整页缩放（guide 页面）
+(function () {
+  var lastTouchEnd = 0;
+
+  // 阻止双指捏合导致页面缩放
+  document.addEventListener('touchstart', function (event) {
+    if (event.touches.length > 1) {
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  // 阻止连续双击放大
+  document.addEventListener('touchend', function (event) {
+    var now = Date.now();
+    if (now - lastTouchEnd <= 300) {
+      event.preventDefault();
+    }
+    lastTouchEnd = now;
+  }, { passive: false });
+
+  // 一些 Safari 用 gesturestart 触发缩放，这里也拦一下
+  document.addEventListener('gesturestart', function (event) {
+    event.preventDefault();
+  }, { passive: false });
+})();
+</script>
+
+<body data-tab="guide">
+<div class="page">
+  <header>
+    <div class="back" onclick="window.location.href='index.html'">‹</div>
+    <div class="titles">
+      <span class="main">领队经验 · Hiking With Me</span>
+      <span class="sub" id="guideSubtitle">路线总览</span>
+    </div>
+    <button class="lock-btn" id="lockBtn" aria-label="解锁编辑">🔓</button>
+  </header>
+
+  <div class="content">
+    <div class="tab-row" id="catTabs"></div>
+
+   <div class="main-row">
+  <div class="display-panel" id="displayPanel">
+    <div class="scene-image-wrapper">
+      <img id="sceneImage" src="" alt="场景图片" />
+      <button class="img-nav prev" id="imgPrev">‹</button>
+      <button class="img-nav next" id="imgNext">›</button>
+
+      <!-- 全屏按钮：显示区右上角 -->
+      <button class="fullscreen-btn"
+              onclick="toggleGuideFullscreen()"
+              aria-label="全屏查看">⤢</button>
+
+      <!-- 素材统计条：图片内部底部透明条 -->
+      <div class="meta-bottom-bar" id="metaBar">
+            <!-- 左侧：当前正在播放的段落 / 总段落 -->
+            <div class="meta-item meta-item-main">
+              <div class="meta-icon meta-icon-page"></div>
+              <span id="metaSegment">0/0</span>
+            </div>
+
+            <!-- 右侧：该段素材统计（音频 / 图片） -->
+            <div class="meta-extra">
+              <div class="meta-item">
+                <div class="meta-icon meta-icon-audio"></div>
+                <span id="metaAudio">0</span>
+              </div>
+              <div class="meta-item">
+                <div class="meta-icon meta-icon-image"></div>
+                <span id="metaImage">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="scene-caption" id="sceneCaption">当前场景说明</div>
+
+        <div class="audio-bar">
+          <button class="audio-btn" id="sectionPrevBtn" aria-label="上一段">⏮</button>
+          <button class="audio-btn" id="playPauseBtn">▶</button>
+          <button class="audio-btn" id="sectionNextBtn" aria-label="下一段">⏭</button>
+
+          <div class="time-label"><span id="currentTime">0:00</span> / <span id="duration">0:00</span></div>
+          <div class="progress" id="progress">
+            <div class="progress-inner" id="progressInner"></div>
+          </div>
+
+          <button class="audio-btn" id="back10Btn" aria-label="后退10秒">
+            <span class="skip-icon">
+              <span class="skip-number">10</span>
+              <span class="skip-arrow left"></span>
+            </span>
+          </button>
+          <button class="audio-btn" id="forward10Btn" aria-label="前进10秒">
+            <span class="skip-icon">
+              <span class="skip-number">10</span>
+              <span class="skip-arrow right"></span>
+            </span>
+          </button>
+
+          <button class="speed-btn" id="speedBtn">1x</button>
+          <button class="audio-btn" id="replayBtn" aria-label="重播当前段落">↻</button>
+        </div>
+      </div>
+
+      <div class="scene-list" id="sceneList"></div>
+    </div>
+  </div>
+</div>
+
+<audio id="guideAudio" preload="auto"></audio>
+
+<script>
+(function(){
+  const cfg = window.ROUTE_GUIDE_CONFIG || {
+    home:{title:"路线总览"},
+    categories:{route:[],gear:[],skill:[],know:[],safety:[]}
+  };
+
+  document.getElementById('guideSubtitle').textContent =
+    (cfg.home && cfg.home.title) ? cfg.home.title : "路线总览";
+
+  const audio = document.getElementById('guideAudio');
+  const sceneImage = document.getElementById('sceneImage');
+  const sceneCaption = document.getElementById('sceneCaption');
+  const sceneListEl = document.getElementById('sceneList');
+
+  const sectionPrevBtn = document.getElementById('sectionPrevBtn');
+  const playPauseBtn = document.getElementById('playPauseBtn');
+  const sectionNextBtn = document.getElementById('sectionNextBtn');
+  const back10Btn = document.getElementById('back10Btn');
+  const forward10Btn = document.getElementById('forward10Btn');
+  const replayBtn = document.getElementById('replayBtn');
+  const speedBtn = document.getElementById('speedBtn');
+  const currentTimeEl = document.getElementById('currentTime');
+  const durationEl = document.getElementById('duration');
+  const progress = document.getElementById('progress');
+  const progressInner = document.getElementById('progressInner');
+  const lockBtn = document.getElementById('lockBtn');
+  const imgPrev = document.getElementById('imgPrev');
+  const imgNext = document.getElementById('imgNext');
+  const catTabs = document.getElementById('catTabs');
+
+  const metaBar = document.getElementById('metaBar');
+  const metaSegmentEl = document.getElementById('metaSegment');
+  const metaAudioEl = document.getElementById('metaAudio');
+  const metaImageEl = document.getElementById('metaImage');
+
+  const meta = cfg.meta || {};
+  const topTabsConfig = (meta.topTabs && meta.topTabs.length)
+    ? meta.topTabs
+    : [
+        { id:'gear',   label:'装备' },
+        { id:'skill',  label:'行走技巧' },
+        { id:'know',   label:'知识' },
+        { id:'safety', label:'安全判断' }
+      ];
+
+  let currentCategory = topTabsConfig.length ? topTabsConfig[0].id : 'gear';
+  let currentSceneIndex = -1;
+  let currentImageIndex = 0;
+  let currentAudioIndex = 0;
+  let locked = false;
+  const speeds = [0.8,1.0,1.2,1.5];
+  let speedIndex = 0;
+
+  const categories = cfg.categories || {route:[],gear:[],skill:[],know:[],safety:[]};
+  let tabButtons = [];
+
+  function secToMMSS(sec){
+    sec = Math.floor(sec||0);
+    const m = Math.floor(sec/60);
+    const s = sec%60;
+    return m + ':' + (s<10?'0'+s:s);
+  }
+
+  function getScenes(){return categories[currentCategory] || [];}
+
+  // 更新底部透明条的统计数字：
+  // 左侧：当前段落 / 总段落；右侧：音频数量、图片数量
+  function updateMetaCounts(audioCount, imageCount){
+    const totalSegments = audioCount || imageCount || 0;
+    const currentSegmentIndex = totalSegments ? (currentAudioIndex + 1) : 0;
+    metaSegmentEl.textContent = totalSegments ? (currentSegmentIndex + ' / ' + totalSegments) : '0/0';
+    metaAudioEl.textContent = audioCount || 0;
+    metaImageEl.textContent = imageCount || 0;
+    metaBar.style.opacity = (audioCount || imageCount) ? 1 : 0.3;
+  }
+
+  function resetAudioUI(){
+    progressInner.style.width = '0';
+    currentTimeEl.textContent = '0:00';
+    durationEl.textContent = '0:00';
+    playPauseBtn.textContent = '▶';
+  }
+
+  function applyLockState(){
+    tabButtons.forEach(btn=>{
+      btn.disabled = locked;
+      btn.classList.toggle('locked', locked);
+    });
+    const sceneButtons = sceneListEl.querySelectorAll('.scene-btn');
+    sceneButtons.forEach(btn=>{
+      btn.disabled = locked;
+      btn.classList.toggle('locked', locked);
+    });
+    [imgPrev,imgNext].forEach(btn=>{
+      btn.disabled = locked;
+      btn.style.opacity = locked ? '0.3' : '1';
+    });
+    const lockSensitiveBtns = [back10Btn,forward10Btn,replayBtn,sectionPrevBtn,sectionNextBtn];
+    lockSensitiveBtns.forEach(btn=>{
+      btn.disabled = locked;
+      btn.classList.toggle('locked', locked);
+    });
+    speedBtn.disabled = locked;
+    speedBtn.classList.toggle('locked', locked);
+    progress.style.opacity = locked ? '0.5' : '1';
+  }
+
+  function renderTabs(){
+    catTabs.innerHTML = '';
+    topTabsConfig.forEach(tab=>{
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn' + (tab.id === currentCategory ? ' active' : '');
+      btn.dataset.cat = tab.id;
+      btn.textContent = tab.label;
+      catTabs.appendChild(btn);
+    });
+    tabButtons = catTabs.querySelectorAll('.tab-btn');
+    applyLockState();
+  }
+
+  function renderSceneList(){
+    const scenes = getScenes();
+    sceneListEl.innerHTML = '';
+    scenes.forEach((scene,index)=>{
+      const btn = document.createElement('button');
+      btn.className = (index === currentSceneIndex) ? 'scene-btn active' : 'scene-btn';
+      btn.dataset.index = index;
+      const main = document.createElement('div');
+      main.textContent = scene.label || '(未命名场景)';
+      btn.appendChild(main);
+      btn.addEventListener('click',()=>{
+        if (locked) return;
+        currentSceneIndex = index;
+        currentImageIndex = 0;
+        currentAudioIndex = 0;
+        updateScene();
+        renderSceneList();
+      });
+      sceneListEl.appendChild(btn);
+    });
+    applyLockState();
+  }
+
+  function updateImage(){
+    const scenes = getScenes();
+    const scene = scenes[currentSceneIndex];
+    if (!scene){
+      sceneImage.src = '';
+      imgPrev.style.display = 'none';
+      imgNext.style.display = 'none';
+      return;
+    }
+    const imgs = scene.images || [];
+    if (imgs.length>0){
+      if (currentImageIndex<0) currentImageIndex = imgs.length-1;
+      if (currentImageIndex>=imgs.length) currentImageIndex = 0;
+      const filename = imgs[currentImageIndex];
+      sceneImage.src = 'assets/images/' + filename;
+      imgPrev.style.display = imgs.length>1 ? 'flex' : 'none';
+      imgNext.style.display = imgs.length>1 ? 'flex' : 'none';
+    }else{
+      sceneImage.src = '';
+      imgPrev.style.display = 'none';
+      imgNext.style.display = 'none';
+    }
+  }
+
+  function updateScene(){
+    const scenes = getScenes();
+    if (!scenes.length){
+      sceneCaption.textContent = '该分类暂无场景';
+      sceneImage.src = '';
+      imgPrev.style.display = 'none';
+      imgNext.style.display = 'none';
+      audio.removeAttribute('src');
+      audio.load();
+      resetAudioUI();
+      updateMetaCounts(0,0);
+      return;
+    }
+
+    if (currentSceneIndex < 0){
+      const cfgAll = window.ROUTE_GUIDE_CONFIG || {};
+      const covers = cfgAll.covers || {};
+      let filename = covers[currentCategory] || '';
+      if (!filename && cfgAll.home && currentCategory === 'route'){
+        filename = cfgAll.home.mapImage || '';
+      }
+      if (filename){
+        sceneImage.src = 'assets/images/' + filename;
+        imgPrev.style.display = 'none';
+        imgNext.style.display = 'none';
+      }else{
+        sceneImage.src = '';
+        imgPrev.style.display = 'none';
+        imgNext.style.display = 'none';
+      }
+      audio.removeAttribute('src');
+      audio.load();
+      resetAudioUI();
+      updateMetaCounts(0,0);
+      return;
+    }
+
+    const scenes2 = getScenes();
+    if (currentSceneIndex>=scenes2.length) currentSceneIndex = scenes2.length-1;
+    const scene = scenes2[currentSceneIndex];
+
+    const audios = (scene.audios && scene.audios.length) ? scene.audios :
+                   (scene.audio ? [scene.audio] : []);
+    const imgs = scene.images || [];
+    const audioCount = audios.length;
+    const imageCount = imgs.length;
+
+    if (audioCount>0 && imageCount>=audioCount){
+      currentImageIndex = Math.min(currentAudioIndex,imageCount-1);
+    }
+
+    updateImage();
+
+    const catLabelMap = {route:'路线',gear:'装备',skill:'行走技巧',know:'知识',safety:'安全判断'};
+    const catLabel = catLabelMap[currentCategory] || '';
+    const parts = [];
+    if (audioCount) parts.push('音频 '+audioCount);
+    if (imageCount) parts.push('图片 '+imageCount);
+    if (catLabel) parts.push(catLabel);
+    sceneCaption.textContent = parts.join(' · ');
+    updateMetaCounts(audioCount,imageCount);
+
+    if (!audioCount){
+      audio.removeAttribute('src');
+      audio.load();
+      resetAudioUI();
+      return;
+    }
+
+    if (currentAudioIndex<0) currentAudioIndex = 0;
+    if (currentAudioIndex>=audioCount) currentAudioIndex = audioCount-1;
+
+    const currentAudioFile = audios[currentAudioIndex];
+    if (currentAudioFile){
+      audio.src = 'assets/audio/' + currentAudioFile;
+      audio.currentTime = 0;
+      audio.playbackRate = speeds[speedIndex];
+      audio.play().catch(()=>{});
+      playPauseBtn.textContent = '⏸';
+    }else{
+      audio.removeAttribute('src');
+      audio.load();
+      resetAudioUI();
+    }
+  }
+
+  function setCategory(cat){
+    if (locked) return;
+    currentCategory = cat;
+    currentSceneIndex = -1;
+    currentImageIndex = 0;
+    currentAudioIndex = 0;
+    renderTabs();
+    renderSceneList();
+    updateScene();
+  }
+
+  playPauseBtn.addEventListener('click',()=>{
+    if (!audio.src){updateScene();return;}
+    if (audio.paused){
+      audio.play().catch(()=>{});
+      playPauseBtn.textContent = '⏸';
+    }else{
+      audio.pause();
+      playPauseBtn.textContent = '▶';
+    }
+  });
+
+  sectionPrevBtn.addEventListener('click',()=>{
+    if (locked) return;
+    const scenes = getScenes();
+    const scene = scenes[currentSceneIndex];
+    if (!scene) return;
+    const audios = (scene.audios && scene.audios.length) ? scene.audios :
+                   (scene.audio ? [scene.audio] : []);
+    if (!audios.length) return;
+    if (currentAudioIndex>0){
+      currentAudioIndex--;
+      updateScene();
+    }
+  });
+
+  sectionNextBtn.addEventListener('click',()=>{
+    if (locked) return;
+    const scenes = getScenes();
+    const scene = scenes[currentSceneIndex];
+    if (!scene) return;
+    const audios = (scene.audios && scene.audios.length) ? scene.audios :
+                   (scene.audio ? [scene.audio] : []);
+    if (!audios.length) return;
+    if (currentAudioIndex<audios.length-1){
+      currentAudioIndex++;
+      updateScene();
+    }
+  });
+
+  back10Btn.addEventListener('click',()=>{
+    if (locked) return;
+    if (!audio.src) return;
+    audio.currentTime = Math.max(0,(audio.currentTime||0)-10);
+  });
+
+  forward10Btn.addEventListener('click',()=>{
+    if (locked) return;
+    if (!audio.src) return;
+    const dur = isFinite(audio.duration) ? audio.duration : (audio.currentTime||0)+10;
+    audio.currentTime = Math.min(dur,(audio.currentTime||0)+10);
+  });
+
+  replayBtn.addEventListener('click',()=>{
+    if (locked) return;
+    if (!audio.src) return;
+    audio.currentTime = 0;
+    audio.play().catch(()=>{});
+    playPauseBtn.textContent = '⏸';
+  });
+
+  speedBtn.addEventListener('click',()=>{
+    if (locked) return;
+    speedIndex = (speedIndex+1)%speeds.length;
+    audio.playbackRate = speeds[speedIndex];
+    speedBtn.textContent = speeds[speedIndex]+'x';
+  });
+
+  audio.addEventListener('timeupdate',()=>{
+    currentTimeEl.textContent = secToMMSS(audio.currentTime);
+    durationEl.textContent = secToMMSS(audio.duration);
+    if (audio.duration>0){
+      const p = (audio.currentTime/audio.duration)*100;
+      progressInner.style.width = p+'%';
+    }else{
+      progressInner.style.width = '0';
+    }
+  });
+
+  audio.addEventListener('ended',()=>{
+    const scenes = getScenes();
+    const scene = scenes[currentSceneIndex];
+    if (!scene){resetAudioUI();return;}
+    const audios = (scene.audios && scene.audios.length) ? scene.audios :
+                   (scene.audio ? [scene.audio] : []);
+    if (audios.length>1 && currentAudioIndex<audios.length-1){
+      currentAudioIndex++;
+      updateScene();
+    }else{
+      resetAudioUI();
+    }
+  });
+
+  progress.addEventListener('click',e=>{
+    if (locked) return;
+    const rect = progress.getBoundingClientRect();
+    const ratio = (e.clientX-rect.left)/rect.width;
+    if (audio.duration>0){
+      audio.currentTime = Math.max(0,Math.min(audio.duration*ratio,audio.duration));
+    }
+  });
+
+  lockBtn.addEventListener('click',()=>{
+    locked = !locked;
+    lockBtn.style.background = locked ? '#c42020' : '#374151';
+    lockBtn.textContent = locked ? '🔒' : '🔓';
+    lockBtn.setAttribute('aria-label', locked ? '已锁定（沉浸模式）' : '解锁编辑');
+    applyLockState();
+  });
+
+  imgPrev.addEventListener('click',()=>{
+    if (locked) return;
+    const scenes = getScenes();
+    if (!scenes.length) return;
+    currentImageIndex--;
+    updateImage();
+  });
+  imgNext.addEventListener('click',()=>{
+    if (locked) return;
+    const scenes = getScenes();
+    if (!scenes.length) return;
+    currentImageIndex++;
+    updateImage();
+  });
+
+  catTabs.addEventListener('click',e=>{
+    const btn = e.target.closest('.tab-btn');
+    if (!btn) return;
+    const cat = btn.dataset.cat;
+    if (!cat) return;
+    setCategory(cat);
+  });
+
+  renderTabs();
+  renderSceneList();
+  updateScene();
+
+     // 显示区伪全屏开关（给右上角按钮用）
+  window.toggleGuideFullscreen = function () {
+    const panel = document.getElementById('displayPanel');
+    if (!panel) return;
+
+    const body = document.body;
+    const isFull = body.classList.contains('guide-fullscreen');
+
+    if (!isFull) {
+      // 进入伪全屏：body 和 panel 都加标记
+      body.classList.add('guide-fullscreen');
+      panel.classList.add('panel-fullscreen');
+    } else {
+      // 退出伪全屏：移除标记
+      body.classList.remove('guide-fullscreen');
+      panel.classList.remove('panel-fullscreen');
+    }
+  };
+
+
+})();
+</script>
+
+<nav class="tab-bar">
+  <button class="bottom-tab" data-tab="pretrip" data-href="pretrip.html">行前准备</button>
+  <button class="bottom-tab" data-tab="route" data-href="route.html">徒步向导</button>
+  <button class="bottom-tab" data-tab="guide" data-href="guide.html">带路宝典</button>
+</nav>
+
+<script>
+(function initBottomTabs(){
+  const current = document.body.getAttribute('data-tab');
+  const buttons = document.querySelectorAll('.bottom-tab');
+  buttons.forEach(btn=>{
+    const tab = btn.dataset.tab;
+    if (tab === current){btn.classList.add('active');}
+    btn.addEventListener('click',()=>{
+      const target = btn.dataset.href;
+      if (!target) return;
+      if (tab === current) return;
+      window.location.href = target;
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>行前准备</title>
+  <meta name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <style>
+    :root {
+      --primary: #111827;
+      --accent: #111827;
+      --bg: #f5f5f7;
+      --card-bg: #ffffff;
+      --border: #e5e7eb;
+      --text-main: #111827;
+      --text-sub: #6b7280;
+      --danger: #dc2626;
+      --warn-bg: #fef3c7;
+      --btn-radius: 999px;
+      --shadow-soft: 0 8px 20px rgba(15, 23, 42, 0.12);
+      --orange: #ff7a1a;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-main);
+    }
+
+    .app-shell {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100vh;
+      background: var(--card-bg);
+      box-shadow: 0 0 0 1px #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      padding-bottom: 70px; /* 预留底部 Tab 空间 */
+    }
+
+    header { display: none; }
+
+    main {
+      padding: 8px 16px 12px;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .intro {
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--text-sub);
+      margin-bottom: 8px;
+    }
+
+    .section {
+      margin-bottom: 10px;
+    }
+
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .field-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .field {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field label {
+      font-size: 16px;
+      font-weight: 600;         /* 加粗字段标题 */
+      color: var(--text-sub);
+      margin-bottom: 2px;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    /* 统一 date 的外观，让它和其他输入、选择控件完全一致 */
+    input[type="date"] {
+      width: 100%;
+      font-size: 16px;
+      padding: 7px 9px;
+      padding-right: 26px;          /* 右侧留出空间给系统日期图标 */
+      border-radius: 8px;           /* 小圆角 */
+      border: 1px solid var(--border);
+      background: #f9fafb;         /* 和其他输入框同色 */
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 36px;                 /* 防止在未选日期时变成一条细线 */
+      line-height: 36px;
+    }
+
+    select {
+      width: 100%;
+      font-size: 14px;
+      padding: 7px 9px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    input[type="number"]{
+      -moz-appearance:textfield;
+    }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button{
+      -webkit-appearance:none;
+      margin:0;
+    }
+
+    input[type="date"] {
+      padding-right: 26px;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: #4f46e5;
+      box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.15);
+      background: #ffffff;
+    }
+
+    .total-line {
+      font-size: 12px;
+      color: var(--text-sub);
+      margin-top: -2px;
+    }
+
+    .copy-link-btn {
+      font-size: 12px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #f9fafb;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .copy-link-btn:active { background:#e5e7eb; }
+
+    .help-text {
+      margin-top: 2px;
+      margin-bottom: 4px;
+      padding-left: 10px;
+      padding-right: 0px;
+      font-size: 14px;
+      color: #666;
+      line-height: 1.6;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .help-text strong { color: #ef4444; }
+
+    .error-text {
+      font-size: 11px;
+      color: var(--danger);
+      min-height: 13px;
+      margin-top: 2px;
+    }
+
+    .btn-primary {
+      display: block;
+      width: 50%;
+      margin: 0 auto;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border:1px solid #e02a15;
+      background:#ffe8e5;
+      color: #1e1c1c;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: default;
+      box-shadow: none;
+    }
+
+    /* 年龄段块（儿童/老人年龄选择） */
+    .age-group-block {
+      margin-top: 6px;
+      border-radius: 8px;
+      background: #f9fafb;
+      padding: 8px 10px;
+      border: 1px dashed #e5e7eb;
+    }
+
+    .age-group-title {
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .age-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .age-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .age-row label {
+      font-size: 12px;
+      width: 54px;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+    }
+
+    .age-row select {
+      flex: 1;
+    }
+
+    /* === 底部 Tab，与其他页面风格一致 === */
+    .tab-bar{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+      display:flex;
+      gap:12px;
+      background:#ffffff;
+      border-top:1px solid #e5e7eb;
+      z-index:999;
+      box-sizing:border-box;
+    }
+
+    .tab-bar .tab-btn,
+    .bottom-tab{
+      flex:1;
+      height:40px;
+      border-radius:12px;
+      border:1px solid #e5e5e5;
+      background:#ffffff;
+      color:#333333;
+      font-size:20px;
+      font-weight:600;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .bottom-tab.active{
+      border-color:#d62828;
+      background:#d62828;
+      color:#ffffff;
+    }
+
+    /* === 弹窗 === */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 40;
+      padding: 16px;
+    }
+    .modal-backdrop.show { display:flex; }
+
+    .modal {
+      width: 100%;
+      max-width: 420px;
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+      padding: 14px 16px 12px;
+      max-height: calc(100vh - 80px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-header {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      margin-bottom:6px;
+    }
+    .modal-title{font-size:15px;font-weight:600;}
+
+    .modal-header-actions{
+      display:none;           /* 生成报告前隐藏，生成后显示 */
+      gap:6px;
+      align-items:center;
+    }
+    .btn-ghost.small,
+    .btn-solid.small{
+      padding:4px 10px;
+      font-size:12px;
+    }
+
+    .modal-body{
+      font-size:13px;
+      color:#111827;
+      overflow-y:auto;
+      padding-right:4px;
+    }
+    .modal-body p{margin:4px 0;}
+
+    .btn-ghost{
+      padding:7px 12px;
+      border-radius:999px;
+      border:1px solid #e5e7eb;
+      background:#f9fafb;
+      font-size:13px;
+      cursor:pointer;
+    }
+    .btn-ghost:active{background:#e5e7eb;}
+
+    .btn-solid{
+      padding:7px 14px;
+      border-radius:999px;
+      border:none;
+      background:#111827;
+      color:#fff;
+      font-size:13px;
+      cursor:pointer;
+    }
+
+    .status-pill{
+      display:inline-flex;
+      align-items:center;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:11px;
+      background:#f3f4f6;
+      color:#4b5563;
+      margin-bottom:4px;
+    }
+    .status-dot{
+      width:6px;
+      height:6px;
+      border-radius:999px;
+      background:#16a34a;
+      margin-right:4px;
+    }
+
+    @media (max-width:360px){
+      .btn-primary{font-size:14px;}
+    }
+    html, body {
+      touch-action: manipulation;
+    }
+  </style>
+</head>
+<body data-tab="pretrip">
+<div class="app-shell">
+  <header></header>
+
+  <main>
+    <!-- 领路人信息 -->
+    <section class="section">
+      <div class="field-row">
+        <div class="field">
+          <label for="leader-name">带路人</label>
+          <input id="leader-name" type="text" placeholder="昵称或姓名" autocomplete="name">
+        </div>
+        <!-- 先显示性别 -->
+        <div class="field" style="max-width:86px;">
+          <label for="leader-title">性别</label>
+          <select id="leader-title">
+            <option value="先生">先生</option>
+            <option value="女士">女士</option>
+          </select>
+        </div>
+        <!-- 再显示年龄 -->
+        <div class="field" style="max-width:72px;">
+          <label for="leader-age">年龄</label>
+          <input id="leader-age" type="number" min="10" max="80" placeholder="">
+        </div>
+      </div>
+    </section>
+
+    <!-- 同行人员 + 年龄段 -->
+    <section class="section">
+      <div class="field-row">
+        <div class="field">
+          <label>同行成人</label>
+          <select id="adult-count">
+            <option value="1">1 人</option>
+            <option value="2">2 人</option>
+            <option value="3">3 人</option>
+            <option value="4">4 人</option>
+            <option value="5">5 人</option>
+            <option value="6">6 人</option>
+            <option value="7">7 人</option>
+            <option value="8">8 人</option>
+            <option value="9">9 人</option>
+            <option value="10">10 人</option>
+            <option value="11">11 人</option>
+            <option value="12">12 人</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>同行儿童</label>
+          <select id="child-count">
+            <option value="0">0 人</option>
+            <option value="1">1 人</option>
+            <option value="2">2 人</option>
+            <option value="3">3 人</option>
+            <option value="4">4 人</option>
+            <option value="5">5 人</option>
+            <option value="6">6 人</option>
+            <option value="7">7 人</option>
+            <option value="8">8 人</option>
+            <option value="9">9 人</option>
+            <option value="10">10 人</option>
+            <option value="11">11 人</option>
+            <option value="12">12 人</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>同行老人(60+)</label>
+          <select id="senior-count">
+            <option value="0">0 人</option>
+            <option value="1">1 人</option>
+            <option value="2">2 人</option>
+            <option value="3">3 人</option>
+            <option value="4">4 人</option>
+            <option value="5">5 人</option>
+            <option value="6">6 人</option>
+            <option value="7">7 人</option>
+            <option value="8">8 人</option>
+            <option value="9">9 人</option>
+            <option value="10">10 人</option>
+            <option value="11">11 人</option>
+            <option value="12">12 人</option>
+          </select>
+        </div>
+      </div>
+      <div class="total-line" id="total-line">共：1 人</div>
+      <div id="age-groups-container"></div>
+    </section>
+
+    <!-- 徒步日期 + 通知时间 -->
+    <section class="section">
+      <div class="field-row">
+        <div class="field">
+          <label for="hike-date">徒步日期</label>
+          <input id="hike-date" type="date">
+        </div>
+        <div class="field">
+          <label for="notice-days">通知时间</label>
+          <select id="notice-days">
+            <option value="1">提前 1 天</option>
+            <option value="2">提前 2 天</option>
+            <option value="3">提前 3 天</option>
+            <option value="3">提前 5 天</option>
+            <option value="7">提前 7 天</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- 开始地点 + 导航地址 -->
+    <section class="section">
+      <div class="field-row">
+        <div class="field">
+          <label for="start-location">开始地点</label>
+          <input id="start-location" type="text" value="汤加里罗官方步道入口" readonly>
+        </div>
+        <div class="field" style="flex:0 0 78px; align-items:flex-end;">
+          <label style="visibility:hidden;">导航</label>
+          <button type="button" class="copy-link-btn" id="copy-nav-btn">导航地址</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 联系方式 -->
+    <section class="section">
+      <div class="field-row">
+        <div class="field">
+          <label for="contact">联系方式</label>
+          <input id="contact" type="text" placeholder="手机或邮箱">
+          <div class="error-text" id="contact-error"></div>
+        </div>
+      </div>
+      <div class="help-text">
+        <ul class="help-text">
+          <li>填好这些信息，我们会为你准备一份行前检查清单;</li>
+          <li>从步道入口开始行走，就能自动获取完整的路线提示;</li>
+          <li>手机或邮箱至少填写一个，用来接收出发前的提醒;</li>
+          <li>以上个人信息仅用于行前准备，隐私保密不对外共享。</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 行前检查按钮 -->
+    <section class="section" style="margin-top:6px;">
+      <button class="btn-primary" type="button" id="check-btn">行前检查</button>
+    </section>
+  </main>
+</div>
+
+<!-- 底部 Tab -->
+<nav class="tab-bar">
+  <button class="bottom-tab active" data-tab="pretrip" data-href="pretrip.html">行前准备</button>
+  <button class="bottom-tab" data-tab="route" data-href="route.html">徒步向导</button>
+  <button class="bottom-tab" data-tab="guide" data-href="guide.html">带路宝典</button>
+</nav>
+
+<!-- 行前检查弹窗 -->
+<div class="modal-backdrop" id="report-backdrop">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <div class="modal-title">行前检查报告 · 出发预览</div>
+      <!-- 生成报告后，这里显示右上角两个按钮 -->
+      <div class="modal-header-actions" id="modal-header-actions">
+        <button type="button" class="btn-ghost small" id="copy-report-btn">复制通知</button>
+        <button type="button" class="btn-solid small" id="modal-close-btn-2">关闭</button>
+      </div>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- 导航地址弹窗 -->
+<div class="modal-backdrop" id="nav-backdrop">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <div class="modal-title">导航地址</div>
+    </div>
+    <div class="modal-body">
+      <p style="margin-bottom:6px;">你可以复制下面的导航地址，或直接在手机地图中打开：</p>
+      <div id="nav-text" style="font-size:13px;white-space:pre-wrap;border-radius:8px;border:1px solid #e5e7eb;padding:8px 10px;background:#f9fafb;margin-top:4px;"></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:8px;">
+  <button type="button" class="btn-solid small" id="nav-apple-btn">Apple 地图</button>
+  <button type="button" class="btn-ghost small" id="nav-google-btn">Google 地图</button>
+  <button type="button" class="btn-ghost small" id="nav-copy-btn">复制地址</button>
+  <button type="button" class="btn-ghost small" id="nav-close-btn">关闭</button>
+</div>
+
+  </div>
+</div>
+
+<script>
+  // 导航文本
+  const NAV_TEXT =
+    "Tongariro Alpine Crossing Car Park, New Zealand (GPS: -39.129, 175.686)";
+
+  const adultSelect  = document.getElementById("adult-count");
+  const childSelect  = document.getElementById("child-count");
+  const seniorSelect = document.getElementById("senior-count");
+  const totalLine    = document.getElementById("total-line");
+  const ageGroupsContainer = document.getElementById("age-groups-container");
+
+  const leaderNameInput   = document.getElementById("leader-name");
+  const leaderTitleSelect = document.getElementById("leader-title");
+  const hikeDateInput     = document.getElementById("hike-date");
+  const startLocationInput= document.getElementById("start-location");
+  const noticeDaysSelect  = document.getElementById("notice-days");
+
+  const contactInput = document.getElementById("contact");
+  const contactError = document.getElementById("contact-error");
+
+  const copyNavBtn  = document.getElementById("copy-nav-btn");
+  const checkBtn    = document.getElementById("check-btn");
+
+  const reportBackdrop = document.getElementById("report-backdrop");
+  const modalBody      = document.getElementById("modal-body");
+  const headerActions  = document.getElementById("modal-header-actions");
+  const modalCloseBtn2 = document.getElementById("modal-close-btn-2");
+  const copyReportBtn  = document.getElementById("copy-report-btn");
+
+    // 导航弹窗相关元素
+  const navBackdrop  = document.getElementById("nav-backdrop");
+  const navTextEl    = document.getElementById("nav-text");
+  const navCopyBtn   = document.getElementById("nav-copy-btn");
+  const navAppleBtn  = document.getElementById("nav-apple-btn");
+  const navGoogleBtn = document.getElementById("nav-google-btn");
+  const navCloseBtn  = document.getElementById("nav-close-btn");
+
+
+  let isChecking = false;
+  let lastReportText = "";
+
+  // 儿童/老人年龄段选项（与 copy 2 逻辑一致）
+  const childAgeOptions = [
+    "8 岁以下",
+    "8–12 岁",
+    "13–16 岁"
+  ];
+
+  const seniorAgeOptions = [
+    "60–65 岁",
+    "65–70 岁",
+    "70 岁以上"
+  ];
+
+  // 同行人数 + 年龄段动态 UI
+  function updateTotalAndAges() {
+    const adultCount  = parseInt(adultSelect.value || "0", 10);
+    const childCount  = parseInt(childSelect.value || "0", 10);
+    const seniorCount = parseInt(seniorSelect.value || "0", 10);
+    const total       = adultCount + childCount + seniorCount;
+    totalLine.textContent = `共：${total} 人`;
+
+    ageGroupsContainer.innerHTML = "";
+
+    if (childCount > 0) {
+      const block = document.createElement("div");
+      block.className = "age-group-block";
+      const title = document.createElement("div");
+      title.className = "age-group-title";
+      title.textContent = "儿童年龄段（估算即可）：";
+      block.appendChild(title);
+
+      for (let i = 0; i < childCount; i++) {
+        const row = document.createElement("div");
+        row.className = "age-row";
+
+        const label = document.createElement("label");
+        label.textContent = `儿童 ${i + 1}`;
+        row.appendChild(label);
+
+        const select = document.createElement("select");
+        select.className = "child-age";
+        childAgeOptions.forEach(opt => {
+          const o = document.createElement("option");
+          o.value = opt;
+          o.textContent = opt;
+          select.appendChild(o);
+        });
+        row.appendChild(select);
+
+        block.appendChild(row);
+      }
+      ageGroupsContainer.appendChild(block);
+    }
+
+    if (seniorCount > 0) {
+      const block = document.createElement("div");
+      block.className = "age-group-block";
+      const title = document.createElement("div");
+      title.className = "age-group-title";
+      title.textContent = "老人年龄段（估算即可）：";
+      block.appendChild(title);
+
+      for (let i = 0; i < seniorCount; i++) {
+        const row = document.createElement("div");
+        row.className = "age-row";
+
+        const label = document.createElement("label");
+        label.textContent = `老人 ${i + 1}`;
+        row.appendChild(label);
+
+        const select = document.createElement("select");
+        select.className = "senior-age";
+        seniorAgeOptions.forEach(opt => {
+          const o = document.createElement("option");
+          o.value = opt;
+          o.textContent = opt;
+          select.appendChild(o);
+        });
+        row.appendChild(select);
+
+        block.appendChild(row);
+      }
+      ageGroupsContainer.appendChild(block);
+    }
+  }
+
+  adultSelect.addEventListener("change", updateTotalAndAges);
+  childSelect.addEventListener("change", updateTotalAndAges);
+  seniorSelect.addEventListener("change", updateTotalAndAges);
+  updateTotalAndAges();
+
+  // 联系方式校验
+  function validateContact(showMessage = true) {
+    const raw = contactInput.value.trim();
+    let msg = "";
+
+    if (!raw) {
+      msg = "请填写手机号码或邮箱，用于接收出发通知。";
+    } else if (raw.includes("@")) {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailPattern.test(raw)) {
+        msg = "请输入有效的邮箱地址。";
+      }
+    } else {
+      const digits = raw.replace(/\\D/g, "");
+      if (digits.length < 7 || digits.length > 15) {
+        msg = "请输入有效的手机号（仅数字，7–15 位）。";
+      }
+    }
+
+    if (msg && showMessage) {
+      contactError.textContent = msg;
+      return false;
+    } else {
+      contactError.textContent = "";
+      return true;
+    }
+  }
+
+  contactInput.addEventListener("blur", () => validateContact(true));
+  contactInput.addEventListener("input", () => {
+    contactError.textContent = "";
+  });
+
+  // 导航弹窗打开/关闭
+  function openNavModal() {
+    if (navTextEl) {
+      navTextEl.textContent = NAV_TEXT;
+    }
+    navBackdrop.classList.add("show");
+  }
+
+  function closeNavModal() {
+    navBackdrop.classList.remove("show");
+  }
+
+  // 导航地址按钮：打开弹窗
+  copyNavBtn.addEventListener("click", () => {
+    openNavModal();
+  });
+
+  // 导航弹窗：复制地址
+  navCopyBtn.addEventListener("click", async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(NAV_TEXT);
+        alert("已复制导航地址，可以粘贴到地图或导航应用中。");
+      } else {
+        alert("当前浏览器不支持一键复制，请长按选择弹窗中的地址手动复制。");
+      }
+    } catch (e) {
+      alert("复制失败，请稍后重试或手动复制导航信息。");
+    }
+  });
+
+    // Apple 地图
+  navAppleBtn.addEventListener("click", () => {
+    const encoded = encodeURIComponent(NAV_TEXT);
+    // iOS 会直接拉起 Apple Maps
+    const url = `http://maps.apple.com/?q=${encoded}`;
+    window.location.href = url;
+  });
+
+  // Google 地图
+  navGoogleBtn.addEventListener("click", () => {
+    const encoded = encodeURIComponent(NAV_TEXT);
+
+    // 1. 尝试使用 Google Maps App 的 URL Scheme
+    const schemeUrl = `comgooglemaps://?q=${encoded}`;
+
+    // 先跳 scheme，再很短时间后回退到 Web 版（没装 App 也能用）
+    window.location.href = schemeUrl;
+
+    setTimeout(() => {
+      const webUrl = `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+      window.location.href = webUrl;
+    }, 300);
+  });
+
+
+  // 导航弹窗：关闭
+  navCloseBtn.addEventListener("click", () => {
+    closeNavModal();
+  });
+
+  // 行前检查弹窗
+  function openModalWithLoading() {
+    reportBackdrop.classList.add("show");
+    lastReportText = "";
+    if (headerActions) headerActions.style.display = "none";
+    modalBody.innerHTML = `
+      <div class="status-pill">
+        <span class="status-dot"></span> 正在生成行前检查报告，请稍候…
+      </div>
+      <p style="margin-top:6px;margin-bottom:4px;">
+        系统正在为本次活动做以下准备：
+      </p>
+      <ul style="margin:4px 0 0 16px;padding-left:0;font-size:13px;">
+        <li>查询当地山地天气预报（体感温度及降水概率）；</li>
+        <li>检查同行人数与基本信息；</li>
+        <li>解析徒步开始地点并生成导航描述；</li>
+        <li>汇总行前装备与安全提醒。</li>
+      </ul>
+    `;
+  }
+  function closeModal() {
+    reportBackdrop.classList.remove("show");
+  }
+  modalCloseBtn2.addEventListener("click", closeModal);
+
+  // 复制通知按钮（右上角）
+  copyReportBtn.addEventListener("click", async () => {
+    if (!lastReportText) {
+      alert("暂无可复制的出发通知，请先完成一次行前检查。");
+      return;
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(lastReportText);
+        alert("已复制行前通知，可以粘贴到微信、邮件或备忘录中。");
+      } else {
+        alert("当前浏览器不支持一键复制，请在弹窗中手动选中并复制内容。");
+      }
+    } catch (e) {
+      alert("复制失败，请稍后重试。");
+    }
+  });
+
+  // 模拟天气接口
+  function fakeWeatherForecast(dateStr) {
+    return new Promise((resolve) => {
+      const baseTemp = 10;
+      const feels = baseTemp - 3;
+      const result = {
+        date: dateStr,
+        segments: [
+          { label: "清晨/上午", temp: baseTemp.toFixed(1), feels: feels.toFixed(1), rain: "10%", wind: "15 km/h" },
+          { label: "中午时段", temp: (baseTemp + 3).toFixed(1), feels: (feels + 2).toFixed(1), rain: "20%", wind: "18 km/h" },
+          { label: "下午/傍晚", temp: (baseTemp + 2).toFixed(1), feels: (feels + 1).toFixed(1), rain: "30%", wind: "20 km/h" }
+        ]
+      };
+      setTimeout(() => resolve(result), 1000);
+    });
+  }
+
+  function buildWeatherSummary(weather) {
+    if (!weather) {
+      return "当天山地天气预报：当前无法自动获取，请出行前自行再确认一次当地预报。";
+    }
+    const lines = weather.segments.map(seg =>
+      `${seg.label}：约 ${seg.temp}°C，体感 ${seg.feels}°C，降水概率 ${seg.rain}，风速 ${seg.wind}`
+    );
+    return "当天山地天气预报（自动获取，仅供参考）：\n" + lines.join("\n");
+  }
+
+  function buildReportText(data, weatherSummary) {
+    const {
+      leaderName,
+      leaderTitle,
+      hikeDate,
+      startLocation,
+      noticeDays,
+      adultCount,
+      childCount,
+      seniorCount,
+      totalCount,
+      contact
+    } = data;
+
+    const leaderLine = leaderName
+      ? `${leaderName} ${leaderTitle}`
+      : `本次徒步组织者`;
+
+    let text = `【${startLocation} · 行前检查报告】\n\n`;
+    text += `组织者：${leaderLine}\n`;
+    text += `徒步日期：${hikeDate || "待定"}\n`;
+    text += `徒步开始地点：${startLocation}\n`;
+    text += `同行人员：成人 ${adultCount} 人，儿童 ${childCount} 人，老人 ${seniorCount} 人（合计 ${totalCount} 人）。\n`;
+    text += `联系方式：${contact || "（未填写）"}\n\n`;
+    text += weatherSummary + "\n\n";
+    text += `行前建议：\n`;
+    text += `· 请提前 ${noticeDays} 天向同行人发送出发通知，并确认装备与集合时间；\n`;
+    text += `· 每人至少准备 1.5–2L 饮用水和简单能量补给；\n`;
+    text += `· 根据当日天气准备防水外套、保暖层与备用干衣物；\n`;
+    text += `· 徒步当天密切关注天气变化，如有特殊情况请及时调整计划。\n\n`;
+    text += `本通知仅用于本次徒步活动的行前准备，请勿转作其他用途。`;
+
+    return text;
+  }
+
+  async function handleCheckClick() {
+    if (isChecking) return;
+
+    const adultCount  = parseInt(adultSelect.value || "0",10);
+    const childCount  = parseInt(childSelect.value || "0",10);
+    const seniorCount = parseInt(seniorSelect.value || "0",10);
+    const totalCount  = adultCount + childCount + seniorCount;
+
+    if (adultCount < 1) {
+      alert("请至少包含 1 名成年人作为带路人。");
+      adultSelect.focus();
+      return;
+    }
+    if (totalCount < 1) {
+      alert("请填写至少 1 名同行人员。");
+      return;
+    }
+    if (!validateContact(true)) {
+      contactInput.focus();
+      return;
+    }
+
+    isChecking = true;
+    checkBtn.disabled = true;
+
+    try {
+      openModalWithLoading();
+
+      const hikeDate = hikeDateInput.value;
+      const minDelay = new Promise((resolve) => setTimeout(resolve, 2000));
+      const weatherPromise = fakeWeatherForecast(hikeDate);
+
+      let weather = null;
+      try {
+        weather = await weatherPromise;
+      } catch (e) {
+        weather = null;
+      }
+      await minDelay;
+
+      const data = {
+        leaderName: leaderNameInput.value.trim(),
+        leaderTitle: leaderTitleSelect.value,
+        hikeDate: hikeDate || "未选择",
+        startLocation: startLocationInput.value.trim() || "徒步开始地点",
+        noticeDays: noticeDaysSelect.value,
+        adultCount,
+        childCount,
+        seniorCount,
+        totalCount,
+        contact: contactInput.value.trim()
+      };
+
+      const weatherSummary = buildWeatherSummary(weather);
+      const reportText = buildReportText(data, weatherSummary);
+      lastReportText = reportText;
+
+      modalBody.innerHTML = `
+        <div class="status-pill">
+          <span class="status-dot"></span> 行前检查完成
+        </div>
+        <p style="margin-top:6px;margin-bottom:4px;">
+          以下内容可复制发送给同行人，用作本次活动的出发通知：
+        </p>
+        <div style="font-size:13px;white-space:pre-wrap;border-radius:8px;border:1px solid #e5e7eb;padding:8px 10px;background:#f9fafb;margin-top:4px;">
+${reportText.replace(/</g,"&lt;").replace(/>/g,"&gt;")}
+        </div>
+      `;
+      if (headerActions) headerActions.style.display = "flex";
+    } finally {
+      checkBtn.disabled = false;
+      isChecking = false;
+    }
+  }
+
+  checkBtn.addEventListener("click", handleCheckClick);
+
+  // 底部 Tab 跳转
+  (function initBottomTabs(){
+    const current = document.body.getAttribute('data-tab');
+    const buttons = document.querySelectorAll('.bottom-tab');
+    buttons.forEach(btn=>{
+      const tab = btn.dataset.tab;
+      if (tab === current){ btn.classList.add('active'); }
+      btn.addEventListener('click',()=>{
+        const href = btn.dataset.href;
+        if (!href || tab === current) return;
+        window.location.href = href;
+      });
+    });
+  })();
+</script>
+</body>
+</html>

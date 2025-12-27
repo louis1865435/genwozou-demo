@@ -1,0 +1,5091 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>体验向导 · 跟我走 Hiking With Me</title>
+
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+  <link rel="stylesheet" href="assets/css/leaflet.css" />
+  <script src="assets/js/leaflet.js"></script>
+  <script src="assets/config/config.js"></script>
+  <script src="./progress_state.js"></script>
+
+<script src="./progress_state.js"></script>
+<style id="FORCED_CHECKIN_BUTTON_STYLE">
+/* === 打卡按钮外观（不碰行为） === */
+.scene-drawer-handle,
+.scene-drawer-handle-button{
+  background: rgba(40,40,40,0.8) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-radius: 999px !important;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.25) !important;
+}
+
+/* 清空内部旧样式 */
+.scene-drawer-handle *,
+.scene-drawer-handle-button *{
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 白色向上三角 */
+.scene-drawer-handle-arrow,
+.scene-drawer-arrow{
+  width: 0 !important;
+  height: 0 !important;
+  border-left: 6px solid transparent !important;
+  border-right: 6px solid transparent !important;
+  border-bottom: 8px solid #ffffff !important;
+  border-top: 0 !important;
+}
+</style>
+
+
+
+
+
+  <style>
+
+    
+    *{
+      margin:0;
+      padding:0;
+      box-sizing:border-box;
+      -webkit-tap-highlight-color:transparent;
+    }
+    html,body{
+      height:100%;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,
+        "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+      background:#f5f5f5;
+    }
+    body{ overflow:hidden; }
+
+    .page{
+      position:relative;
+      width:100%;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      background:#f5f5f5;
+    }
+    .map-wrapper{
+      position:relative;
+      flex:1 1 auto;
+      overflow:hidden;
+      background:#e6e9f5;
+    }
+    #map{
+      width:100%;
+      height:100%;
+    }
+
+    .stats-card{
+      position:absolute;
+      top:12px;
+      left:12px;
+      background:rgba(255,255,255,0.96);
+      border-radius:10px;
+      padding:8px 10px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.15);
+      font-size:11px;
+      line-height:1.5;
+      color:#444;
+      z-index:800;
+    }
+    .stats-card strong{
+      color:#b20000;
+      font-weight:600;
+    }
+
+    /* 隐藏右下角 Leaflet 默认的版权/地图来源卡片 */
+    .leaflet-control-attribution{
+      display:none !important;
+    }
+
+    /* 统一关闭地图上的长按呼出菜单 & 文本选择 */
+    body, #map{
+      -webkit-touch-callout:none;
+      -webkit-user-select:none;
+      user-select:none;
+    }
+
+    .map-tools{
+      position:absolute;
+      top:18px;
+      right:12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      z-index:810;
+    }
+
+    /* === 路线节点气泡（红边标签） === */
+    .poi-marker{
+      pointer-events:auto;
+    }
+
+    /* 默认：不显示竖线 + 普通轻投影 */
+    .poi-label{
+      position:relative;
+      display:inline-flex;
+      align-items:center;
+      padding:2px 9px;
+      border-radius:999px;
+      border:1px solid rgba(0,0,0,0.08);
+      background:rgba(255,255,255,0.96);
+      color:#222;
+      font-size:11px;
+      font-weight:400;
+      white-space:nowrap;
+      box-shadow:none;
+    }
+
+    /* 默认：竖线隐藏 */
+    .poi-label::before{
+      content:"";
+      display:none;
+    }
+
+    /* 选中状态：红边 + 红字 + 竖线 */
+    .poi-label--active{
+      border-color:#d62828;
+      color:#d62828;
+      font-weight:500;
+      box-shadow:none;
+    }
+    .poi-label--active::before{
+      display:block;
+      position:absolute;
+      left:50%;
+      top:100%;
+      margin-top:2px;
+      width:2px;
+      height:14px;
+      transform:translateX(-50%);
+      background:#d62828;
+      border-radius:999px;
+      box-shadow:0 1px 2px rgba(214,40,40,0.45);
+    }
+    .poi-label--active::after{
+      content:"";
+      position:absolute;
+      left:45%;
+      top:100%;
+      margin-top:15px;
+      width:70%;
+      height:8px;
+      transform:translateX(-50%);
+      border-radius:50%;
+      background:rgba(0,0,0,0.22);
+      filter:blur(4px);
+      pointer-events:none;
+    }
+
+    .tool-btn{
+      width:40px;
+      height:40px;
+      border-radius:20px;
+      border:none;
+      background:rgba(255,255,255,0.96);
+      box-shadow:0 2px 6px rgba(0,0,0,0.15);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:13px;
+      color:#222;
+      cursor:pointer;
+    }
+    .tool-btn:active{
+      transform:scale(0.96);
+      box-shadow:0 1px 3px rgba(0,0,0,0.2);
+    }
+
+    /* 按钮激活状态：只变成红字 + 稍微加粗 */
+    .tool-btn.active{
+      color:#d60000;
+      font-weight:600;
+    }
+
+    /* 节点图层按钮的小图标：三条叠在一起的“图层” */
+    .icon-layerstack{
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+      align-items:center;
+      justify-content:center;
+    }
+    .icon-layerstack .layer{
+      display:block;
+      width:16px;
+      height:1.6px;
+      border-radius:1px;
+      background:#222;
+    }
+    /* 只有节点按钮激活时，让图层图标变红 */
+    #btnNodeToggle.active .icon-layerstack .layer{
+      background:#d60000;
+    }
+
+    /* SAT 按钮激活时：文字变红、加粗 */
+    #btnLayerToggle.active{
+      color:#d60000;
+      font-weight:600;
+    }
+
+    .map-tools-bottom{
+      position:absolute;
+      right:12px;
+      bottom:90px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      z-index:810;
+    }
+    .tool-round{
+      width:44px;
+      height:44px;
+      border-radius:22px;
+      border:none;
+      background:rgba(255,255,255,0.96);
+      box-shadow:0 2px 6px rgba(0,0,0,0.18);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .tool-round:active{
+      transform:scale(0.95);
+      box-shadow:0 1px 3px rgba(0,0,0,0.2);
+    }
+    .tool-round svg{
+      width:24px;
+      height:24px;
+      stroke:#000;
+      fill:none;
+    }
+
+    .cache-status{
+      position:absolute;
+      left:50%;
+      bottom:140px;
+      transform:translateX(-50%);
+      background:rgba(0,0,0,0.7);
+      color:#fff;
+      padding:6px 10px;
+      border-radius:14px;
+      font-size:11px;
+      line-height:1.4;
+      max-width:80%;
+      text-align:center;
+      z-index:820;
+      display:none;
+    }
+
+    .leaflet-control-attribution{
+      font-size:9px;
+      background:rgba(255,255,255,0.9);
+      position:absolute !important;
+      bottom:72px !important;
+      right:5px !important;
+      z-index:600 !important;
+      padding:3px 6px;
+      border-radius:4px;
+      max-width:65%;
+    }
+    /* ===== 场景信息流悬浮窗 ===== */
+    .scene-panel{
+      position:absolute;
+      left:8px;
+      right:8px;
+      bottom:72px;                 /* 刚好顶在底部 Tab 上面 */
+      border-radius:12px 12px 0 0;
+      background:rgba(40,40,40,0.88);
+      box-shadow:0 -6px 18px rgba(0,0,0,0.45);
+      color:#fff;
+      font-size:11px;
+      overflow:hidden;
+      backdrop-filter:blur(14px);
+      -webkit-backdrop-filter:blur(14px);
+      z-index:830;
+    }
+
+    /* 顶部状态条 + 居中下拉三角，留出空白不被文字覆盖 */
+    .scene-header{
+      display:flex;
+      align-items:center;
+      padding:4px 8px 6px;
+      border-bottom:1px solid rgba(255,255,255,0.15);
+      background:rgba(30,30,30,0.95);
+    }
+    .scene-header-left,
+    .scene-header-right{
+      flex:1;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      color:rgba(255,255,255,0.9);
+    }
+    .scene-header-left{
+      text-align:left;
+    }
+    .scene-header-right{
+      text-align:right;
+    }
+
+    .scene-header-arrow{
+      width:56px;             /* 这个宽度就是留白区域 */
+      height:20px;
+      position:relative;
+    }
+    .scene-header-arrow::after{
+      content:"";
+      position:absolute;
+      left:50%;
+      top:2px;
+      transform:translateX(-50%);
+      width:0;
+      height:0;
+      border-left:16px solid transparent;
+      border-right:16px solid transparent;
+      border-top:10px solid #f5f5f5;   /* 白色小三角 */
+    }
+
+    /* 整体表格区域 */
+    .scene-table{
+      width:100%;
+    }
+
+    .scene-row{
+      display:flex;
+      align-items:stretch;
+      min-height:32px;
+      border-top:1px solid rgba(255,255,255,0.12);
+    }
+
+    /* 当前行：整行绿色底，白字，加粗 */
+    .scene-row-current{
+      background:#09a540;
+      font-weight:600;
+    }
+
+    .scene-col{
+      padding:4px 6px;
+      display:flex;
+      align-items:center;
+      justify-content:flex-start;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    /* 左侧距离色块列：宽固定，字号略大一点 */
+    .scene-col-distance{
+      width:68px;
+      flex:0 0 68px;
+      font-weight:600;
+      justify-content:center;
+      color:#fff;
+    }
+    .scene-distance--green{  background:#00aa40; }
+    .scene-distance--yellow{ background:#ffb400; }
+    .scene-distance--orange{ background:#ff7a00; }
+    .scene-distance--red{    background:#e02020; }
+
+    /* 中间两列：标题 & 场景组合文字 */
+    .scene-col-title{
+      flex:1.1;
+      flex-direction:column;
+      align-items:flex-start;
+      justify-content:center;
+      gap:2px;
+    }
+    .scene-title-main{
+      font-size:12px;
+      font-weight:600;
+    }
+    .scene-title-sub{
+      font-size:11px;
+      color:rgba(255,255,255,0.75);
+    }
+
+    /* 右侧两列：距离/时间 和 进度条 */
+    .scene-col-length{
+      width:70px;
+      flex:0 0 70px;
+      justify-content:flex-end;
+      font-variant-numeric:tabular-nums;
+    }
+    .scene-col-progress{
+      width:70px;
+      flex:0 0 70px;
+      padding-right:10px;
+      justify-content:flex-end;
+    }
+
+    .scene-progress-bar{
+      width:100%;
+      height:6px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.25);
+      overflow:hidden;
+    }
+    .scene-progress-fill{
+      height:100%;
+      border-radius:999px;
+      background:#00e676;
+    }
+
+    /* 让普通行略微深一点、分层感更好 */
+    .scene-row:nth-child(2n+1):not(.scene-row-current){
+      background:rgba(0,0,0,0.12);
+    }
+
+    /* === 底部 Tab 栏统一样式 === */
+    .tab-bar{
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      display:flex;
+      gap:10px;
+      padding:8px 12px calc(8px + env(safe-area-inset-bottom));
+      background:#f9fafb;
+      box-shadow:0 -2px 6px rgba(0,0,0,0.06);
+      z-index:900;
+    }
+
+    /* === 底部场景抽屉小按钮（灰色上拉） === */
+    .scene-drawer-handle{
+      position:absolute;
+      left:50%;
+      bottom:60px; /* 在底部 Tab 栏上方一点 */
+      transform:translateX(-50%);
+      z-index:840;
+    }
+
+    /* 底部抽屉手柄按钮（上拉） */
+    .scene-drawer-button{
+      width:90px;
+      height:30px;
+      border-radius:12px;
+      background:rgba(40,40,40,0.32);
+      box-shadow:0 2px 8px rgba(0,0,0,0.25);
+      backdrop-filter:blur(8px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      transition:background 0.2s;
+    }
+
+    /* 默认：白色向上的小箭头 */
+    .scene-drawer-arrow{
+      width:0;
+      height:0;
+      border-left:7px solid transparent;
+      border-right:7px solid transparent;
+      border-bottom:9px solid #ffffff;
+    }
+
+    /* 当某个节点有场景信息流时：底部手柄箭头变红 */
+    .scene-drawer-handle--active .scene-drawer-arrow{
+      border-bottom-color:#d62828;
+    }
+
+    /* 基础按钮样式（高度、圆角、字体都统一） */
+    .tab-btn,
+    .bottom-tab{
+      flex:1;
+      height:40px;
+      border-radius:12px;
+      border:1px solid #e5e5e5;
+      background:#ffffff;
+      color:#333333;
+      font-size:20px;
+      font-weight:600;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:0;
+    }
+
+    /* 未选中状态（白底黑灰字） */
+    .tab-btn-ghost,
+    .bottom-tab{
+      background:#ffffff;
+      color:#333333;
+    }
+
+    /* 选中状态（红底白字） */
+    .tab-btn-primary,
+    .bottom-tab.active{
+      border-color:#d62828;
+      background:#d62828;
+      color:#ffffff;
+    }
+
+    @media (min-width:768px){
+      .page{ max-width:480px; margin:0 auto; }
+      .tab-bar{ max-width:480px; margin:0 auto; left:50%; transform:translateX(-50%); }
+    }
+
+    /* ====== 视频全屏层 ====== */
+    .video-overlay{
+      position:fixed;
+      inset:0;
+      z-index:1200;
+      background:#000;
+      display:none;
+      align-items:center;
+      justify-content:center;
+    }
+    .video-overlay.show{
+      display:flex;
+    }
+
+    /* ====== 路线剖面图：顶部 1/4 半透明悬浮层 ====== */
+    .elev-panel{
+      position:absolute;
+      left:8px;
+      right:8px;
+      top:0;
+      height:25%;
+      max-height:180px;
+      background:rgba(0,0,0,0.55);
+      border-radius:0 0 12px 12px;
+      padding:6px 10px 10px;
+      z-index:820;
+      display:none;
+      backdrop-filter:blur(6px);
+      -webkit-backdrop-filter:blur(6px);
+    }
+    .elev-panel-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:4px;
+      color:#fff;
+      font-size:11px;
+    }
+    .elev-panel-title{
+      font-weight:500;
+    }
+    .elev-panel-close{
+      font-size:16px;
+      line-height:1;
+      padding:2px 6px;
+      display:none;   /* 隐藏右上角小 X */
+    }
+    #elevCanvas{
+      width:100%;
+      height:100%;
+      display:block;
+    }
+
+    /* 剖面交互标签 */
+    .elev-tooltip{
+      position:absolute;
+      padding:4px 8px;
+      background:#ffffff;
+      color:#e10e0e;
+      border-radius:8px;
+      font-size:11px;
+      line-height:1.4;
+      box-shadow:0 2px 6px rgba(217, 4, 4, 0.35);
+      top:8px;
+      left:40px;
+      pointer-events:auto;
+      white-space:nowrap;
+    }
+    .elev-tooltip-label{
+      color:#222;
+    }
+    .elev-tooltip-value{
+      color:#b20000;
+      font-weight:600;
+    }
+
+    /* 视频容器占满 */
+    .video-container{
+      position:relative;
+      width:100%;
+      height:100%;
+      padding:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    #routeVideo{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      background:#000;
+    }
+
+    .video-controls{
+      position:absolute;
+      left:50%;
+      bottom:30px;
+      transform:translateX(-50%);
+      display:flex;
+      align-items:center;
+      gap:15px;
+      padding:6px 12px;
+      border-radius:999px;
+      background:rgba(0,0,0,0.35);
+      backdrop-filter:blur(10px);
+      -webkit-backdrop-filter:blur(10px);
+    }
+    .video-btn-icon{
+      width:30px;
+      height:30px;
+      border-radius:15px;
+      border:none;
+      background:transparent;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .video-btn-icon:active{
+      transform:scale(0.95);
+    }
+    .icon-shape{
+      position:relative;
+      display:block;
+    }
+    .icon-back{
+      width:0;
+      height:0;
+      border-top:6px solid transparent;
+      border-bottom:6px solid transparent;
+      border-right:8px solid #fff;
+    }
+    .icon-back::before{
+      content:"";
+      position:absolute;
+      left:-9px;
+      top:-6px;
+      width:0;
+      height:0;
+      border-top:6px solid transparent;
+      border-bottom:6px solid transparent;
+      border-right:8px solid #fff;
+    }
+    .icon-play{
+      width:0;
+      height:0;
+      border-top:7px solid transparent;
+      border-bottom:7px solid transparent;
+      border-left:11px solid #fff;
+      margin-left:2px;
+    }
+    .icon-pause{
+      width:11px;
+      height:13px;
+      display:flex;
+      justify-content:space-between;
+    }
+    .icon-pause::before,
+    .icon-pause::after{
+      content:"";
+      width:3px;
+      height:100%;
+      background:#fff;
+      border-radius:999px;
+    }
+    .icon-forward{
+      width:0;
+      height:0;
+      border-top:6px solid transparent;
+      border-bottom:6px solid transparent;
+      border-left:8px solid #fff;
+    }
+    .icon-forward::before{
+      content:"";
+      position:absolute;
+      right:-9px;
+      top:-6px;
+      width:0;
+      height:0;
+      border-top:6px solid transparent;
+      border-bottom:6px solid transparent;
+      border-left:8px solid #fff;
+    }
+    .video-btn-speed{
+      min-width:32px;
+      height:32px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,0.85);
+      color:#fff;
+      font-size:11px;
+      background:transparent;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .video-btn-speed:active{
+      transform:scale(0.95);
+    }
+    .video-btn-close{
+      width:26px;
+      height:26px;
+      border-radius:6px;
+      border:1px solid rgba(255,255,255,0.8);
+      background:transparent;
+      color:#fff;
+      font-size:14px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+    }
+    .video-btn-close:active{
+      transform:scale(0.95);
+    }
+
+    html, body {
+      touch-action: manipulation;
+    }
+
+   /* === 抽屉内容层（默认藏在底部）=== */
+.scene-drawer-panel{
+  position:absolute;
+  left:8px;
+  right:8px;
+  bottom:0;
+  height:38vh;               /* 默认：约 1/3 屏幕 */
+  max-height:360px;
+  background:rgba(0,0,0,0.45);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border-radius:16px 16px 0 0;
+  box-shadow:0 -4px 16px rgba(0,0,0,0.25);
+  transform:translateY(100%);
+  transition:
+    transform 0.28s cubic-bezier(.25,.8,.25,1),
+    height 0.25s ease;       /* 高度变化也带动画 */
+  z-index:850;
+  display:flex;
+  flex-direction:column;
+  padding:4px 8px 8px;
+}
+
+/* 抽屉“高档位”：约 2/3 屏幕高度，顶到右侧图层按钮下面 */
+.scene-drawer-panel.drawer-tall{
+  height:66vh;
+  max-height:520px;
+}
+
+
+
+/* 抽屉打开状态 */
+.scene-drawer-panel.open{
+  transform:translateY(0);
+}
+/* ===============================
+ * 抽屉头部（速度 / 拉手 / 时间）
+ * 要求：
+ * - 颜色 = 天气栏（但略深）
+ * - 左右不留白，完全贴边
+ * - 上圆角，下直角
+ * - 拉手三角：关 ▲ / 开 ▼，白色
+ * =============================== */
+
+.scene-drawer-header{
+  position: relative;
+  height: 32px;                              /* 稍加高，更像系统栏 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  /* 🔴 关键 1：颜色 = 天气栏，但更深 */
+  background: rgba(32, 32, 32, 0.72);
+
+  /* 🔴 关键 2：完全贴边，不留白 */
+  margin: 0;
+  padding: 0;
+
+  /* 🔴 关键 3：上圆角，下直角（镜像天气栏） */
+  border-radius: 16px 16px 0 0;
+
+  /* 🔴 关键 4：分隔线弱化 */
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+
+  box-sizing: border-box;
+}
+
+
+/* 左：当前行进速度 */
+.scene-drawer-header-left,
+.scene-drawer-header-right{
+  flex: 1;
+  font-size: 13px;                 /* 与天气栏文字一致 */
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 10px;                 /* 内边距给文字，不是给整体留白 */
+}
+
+.scene-drawer-header-left{
+  text-align: left;
+}
+
+.scene-drawer-header-right{
+  text-align: right;
+}
+
+
+/* 中：拉手区域 */
+.scene-drawer-header-center{
+  width: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* 拉手按钮（颜色必须和 header 一致） */
+.scene-drawer-header-button{
+  width: 56px;
+  height: 26px;
+  border-radius: 13px;
+  background: rgba(32, 32, 32, 0.72);  /* 与 header 完全同色 */
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* 白色三角形（默认：关闭状态，▲ 朝上） */
+.scene-drawer-header-arrow{
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 9px solid #ffffff;  /* ▲ */
+  transition: transform 0.2s ease;
+}
+
+
+/* 抽屉打开后：三角翻转为 ▼ */
+.scene-drawer.open .scene-drawer-header-arrow{
+  transform: rotate(180deg);         /* ▲ → ▼ */
+}
+
+
+/* 抽屉内部滚动区域（只滚表格，不滚头部） */
+.drawer-inner{
+  flex:1 1 auto;                 /* 跟随抽屉高度自动伸缩 */
+  min-height:0;                  /* 关键：允许内部内容在剩余高度里滚动 */
+  overflow-y:auto;               /* 超出时滚动 */
+  padding:0 0 20px 0;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+}
+/* ===============================
+ * 🔥 强制去掉抽屉头部外层留白（关键补丁）
+ * =============================== */
+
+/* 抽屉最外层 */
+.scene-drawer-panel{
+  padding: 0 !important;
+  background: rgba(45, 45, 45, 0.9);
+
+}
+
+/* 抽屉内容容器（常见留白来源） */
+.scene-drawer,
+.scene-drawer-wrap{
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* ===================================================
+ * Drawer Scene List (stable v1) - manualScenes
+ * =================================================== */
+.drawer-scene-list{
+  padding: 10px 10px 18px;
+}
+.drawer-scene-row{
+  display:flex;
+  align-items:stretch;
+  gap:10px;
+  padding:10px 8px;
+  border-radius:14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  margin-bottom:10px;
+  cursor:pointer;
+}
+.drawer-scene-row:hover{
+  background: rgba(255,255,255,0.09);
+}
+.drawer-km-pill{
+  flex:0 0 auto;
+  min-width:58px;
+  height:28px;
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:700;
+  font-size:12px;
+  color:#0b0b0b;
+  background: rgba(255,255,255,0.85);
+}
+.drawer-scene-main{
+  flex:1 1 auto;
+  min-width:0;
+}
+.drawer-scene-title{
+  font-size:14px;
+  font-weight:700;
+  color: rgba(255,255,255,0.96);
+  line-height:1.2;
+}
+.drawer-scene-desc{
+  margin-top:4px;
+  font-size:12px;
+  color: rgba(255,255,255,0.66);
+  line-height:1.2;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.drawer-scene-metric{
+  flex:0 0 92px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  gap:6px;
+}
+.drawer-scene-bar{
+  height:6px;
+  border-radius:999px;
+  background: rgba(255,255,255,0.20);
+  overflow:hidden;
+}
+.drawer-scene-bar > div{
+  height:100%;
+  width:0%;
+  border-radius:999px;
+  background: rgba(255,255,255,0.85);
+}
+.drawer-scene-metric-text{
+  font-size:11px;
+  color: rgba(255,255,255,0.75);
+  text-align:right;
+  white-space:nowrap;
+}
+.drawer-scene-row.active{
+  outline:2px solid rgba(255,255,255,0.35);
+}
+
+
+
+/* ===== 场景信息流表格（放在抽屉里） ===== */
+.scene-flow{
+  width:100%;
+  font-size:13px;
+  color:#f5f5f5;
+}
+
+/* 顶部：当前速度 / 当前偏差时间 + 中间箭头，文字不遮盖三角 */
+.scene-flow-header{
+  position:sticky;
+  top:0;
+  z-index:9999;
+
+  background:rgba(0,0,0,0.45);
+  backdrop-filter:blur(10px);
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+
+  padding:8px 12px;
+}
+
+
+/* 表体 */
+.scene-flow-table{
+  border-radius:6px;
+  overflow:hidden;
+}
+
+/* 每一行 */
+.scene-flow-row{
+  display:flex;
+  align-items:center;
+  min-height:36px;        /* 原来是 30px，+20% */
+  padding:4px 12px;       /* 新增这一行，拉高行距 */
+  background:rgba(0,0,0,0.18);
+  border-top:1px dotted rgba(255,255,255,0.2);
+}
+
+
+.scene-flow-row:first-child{
+  border-top:none;
+}
+.scene-flow-row:nth-child(2n+1){
+  background:rgba(0,0,0,0.26);
+}
+
+/* 当前行：整行浅绿底 */
+.scene-flow-row-current{
+  background:#14a549;
+}
+/* 当前场景左侧红色小三角指针 */
+.scene-flow-row-current::before{
+  content:"";
+  position:absolute;
+  left:8px;                 /* 越小越靠左，你觉得还想再靠左，可改成 6px、4px */
+  top:50%;
+  transform:translateY(-50%);
+  width:0;
+  height:0;
+  border-top:6px solid transparent;
+  border-bottom:6px solid transparent;
+  border-left:8px solid #ff3b30;  /* 红色小三角，尖头向右 */
+}
+.scene-flow-row-current .scene-flow-title{
+  color:#ffffff;      /* 恢复白色 */
+}
+
+
+.scene-flow-cell{
+  padding:4px 4px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* 左侧色块距离列：色块只比文字略宽 */
+.scene-flow-cell-distance{
+  width:54px;
+  flex:0 0 54px;
+  justify-content:center;
+}
+.scene-flow-distance{
+  min-width:44px;
+  padding:4px 6px;
+  border-radius:6px;
+  font-weight:600;
+  font-size:12px;
+  text-align:center;
+  color:#ffffff;
+}
+
+.scene-flow-distance-green{  background:#00aa40; }
+.scene-flow-distance-yellow{ background:#ffb400; }
+.scene-flow-distance-orange{ background:#ff7a00; }
+.scene-flow-distance-red{    background:#e02020; }
+
+/* 中间标题 + 场景组合 */
+.scene-flow-cell-main{
+  flex:1.9;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+}
+.scene-flow-title{
+  font-size:14px;
+  font-weight:600;
+  color:#ffffff;                  /* 主文案改成亮白 */
+}
+.scene-flow-sub{
+  font-size:12px;                 /* 副文案略大一点 */
+  color:rgba(255,255,255,0.96);   /* 更亮的白字 */
+}
+.scene-flow-sub-current {
+    color: #ffffff !important;
+}
+
+.scene-flow-length-text-current {
+    color: #ffffff !important;
+}
+
+
+
+/* 右侧：距离/时间 */
+/* 右侧：进度条 + 下方数字 */
+.scene-flow-cell-bar{
+  width:64px;
+  flex:0 0 64px;
+  flex-direction:column;
+  align-items:flex-end;
+  justify-content:center;
+  gap:3px;
+}
+.scene-flow-bar{
+  width:100%;
+  height:6px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.28);
+  overflow:hidden;
+}
+.scene-flow-bar-fill{
+  height:100%;
+  border-radius:999px;
+  background:#00e676;
+}
+.scene-flow-length-text{
+  font-size:13px;
+  opacity:0.9;
+  font-variant-numeric:tabular-nums;
+}
+/* 当前场景左侧红色三角指针（尖头向右） */
+.scene-flow-row-current{
+  position:relative;
+  background:#14a549;
+  font-weight:600;
+}
+
+.scene-flow-row-current::before{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:50%;
+  transform:translateY(-50%);
+  width:0;
+  height:0;
+  border-top:5px solid transparent;
+  border-bottom:5px solid transparent;
+  border-left:7px solid #ff3b30; /* ← 正确：尖头向右 */
+}
+.elev-weather-text{
+  position:absolute;        /* 让天气栏绝对定位，脱离普通文流，贴在悬浮窗内部 */
+  left:0;                   /* 左边对齐悬浮窗 */
+  right:0;                  /* 右边对齐悬浮窗 */
+  bottom:6px;               /* ⬅️ 整个背景条距离悬浮窗底部的高度（调高低） */
+
+  /* —— 内间距（决定条的高度 + 文字上下位置） —— */
+  padding:5px 12px 8px;     /* 上内距5px，下内距8px，使文字略微偏下、更居中 */
+
+  /* —— 文本行高（控制图标+文字在一行中的垂直居中） —— */
+  line-height:1.35;         /* Emoji 基线偏高，此参数用来让视觉居中 */
+
+  /* —— 文本显示 —— */
+  text-align:center;        /* 居中整行文字 */
+  font-size:13px;           /* 字体大小 */
+  font-weight:600;          /* 字重，提高可读性 */
+  color:#ffffff;            /* 白色文字 */
+
+  /* —— 文本溢出处理 —— */
+  white-space:nowrap;       /* 不换行 */
+  overflow:hidden;          /* 超出裁剪 */
+  text-overflow:ellipsis;   /* 超出显示省略号（正常用不到） */
+
+  /* —— 背景样式 —— */
+  background:rgba(0,0,0,0.18);  /* 半透明背景，增强对比度 */
+  border-radius:0 0 18px 18px;  /* 下圆角与悬浮窗保持一致 */
+
+  /* —— 图层和交互 —— */
+  z-index:999;              /* 保证天气栏显示在剖面图之上 */
+  pointer-events:none;      /* 禁止点击，避免挡住剖面图的交互 */
+  
+  /* ⭐⭐⭐ 关键：让“整行文字 + 图标”向下平移一点，背景不动 ⭐⭐⭐ */
+  transform: translateY(2px);  /* ⬅️ 调这个就能让整行内容往下移动（你要的效果） */
+}
+
+
+
+
+
+
+  </style>
+
+<!-- === LEGACY DRAWER CSS (FROM route_restored_old_ui.html) === -->
+<style>
+/* === 底部场景抽屉小按钮（灰色上拉） === */
+    .scene-drawer-handle{
+      position:absolute;
+      left:50%;
+      bottom:60px; /* 在底部 Tab 栏上方一点 */
+      transform:translateX(-50%);
+      z-index:840;
+    }
+
+
+    /* 底部抽屉手柄按钮（上拉） */
+    .scene-drawer-button{
+      width:90px;
+      height:30px;
+      border-radius:12px;
+      background:rgba(40,40,40,0.32);
+      box-shadow:0 2px 8px rgba(0,0,0,0.25);
+      backdrop-filter:blur(8px);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      transition:background 0.2s;
+    }
+
+
+    /* 默认：白色向上的小箭头 */
+    .scene-drawer-arrow{
+      width:0;
+      height:0;
+      border-left:7px solid transparent;
+      border-right:7px solid transparent;
+      border-bottom:9px solid #ffffff;
+    }
+
+
+    /* 当某个节点有场景信息流时：底部手柄箭头变红 */
+    .scene-drawer-handle--active .scene-drawer-arrow{
+      border-bottom-color:#d62828;
+    }
+
+
+   /* === 抽屉内容层（默认藏在底部）=== */
+.scene-drawer-panel{
+  position:absolute;
+  left:8px;
+  right:8px;
+  bottom:0;
+  height:38vh;               /* 默认：约 1/3 屏幕 */
+  max-height:360px;
+  background:rgba(0,0,0,0.45);
+  backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border-radius:16px 16px 0 0;
+  box-shadow:0 -4px 16px rgba(0,0,0,0.25);
+  transform:translateY(100%);
+  transition:
+    transform 0.28s cubic-bezier(.25,.8,.25,1),
+    height 0.25s ease;       /* 高度变化也带动画 */
+  z-index:850;
+  display:flex;
+  flex-direction:column;
+  padding:4px 8px 8px;
+}
+
+
+/* 抽屉“高档位”：约 2/3 屏幕高度，顶到右侧图层按钮下面 */
+.scene-drawer-panel.drawer-tall{
+  height:66vh;
+  max-height:520px;
+}
+
+
+
+
+/* 抽屉打开状态 */
+.scene-drawer-panel.open{
+  transform:translateY(0);
+}
+
+
+/* 抽屉头部：左 速度 · 中 三角 · 右 偏差时间（固定不滚动） */
+.scene-drawer-header{
+  position:relative;
+  display:flex;
+  align-items:center;
+  padding:2px 10px 4px;                     /* 文字和箭头再往上提一点 */
+  border-bottom:1px solid rgba(255,255,255,0.15);
+  background:transparent;                   /* 不再单独一条黑色背景，继承毛玻璃 */
+  z-index:2;
+}
+
+
+
+.scene-drawer-header-left,
+.scene-drawer-header-right{
+  flex:1;
+  font-size:12px;           /* 字号放大一号 */
+  color:#ffffff;            /* 纯白，更亮 */
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+
+.scene-drawer-header-left{ text-align:left; }
+
+.scene-drawer-header-right{ text-align:right; }
+
+
+/* 中间关闭小三角按钮（取代原来的 .drawer-close） */
+.scene-drawer-header-center{
+  width:70px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.scene-drawer-header-button{
+  width:70px;
+  height:24px;
+  border-radius:12px;
+  background:transparent;
+  border:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+
+.scene-drawer-header-arrow{
+  width:0;
+  height:0;
+  border-left:8px solid transparent;
+  border-right:8px solid transparent;
+  border-top:8px solid #f5f5f5;
+}
+
+
+
+
+
+
+/* ===== 场景信息流表格（放在抽屉里） ===== */
+.scene-flow{
+  width:100%;
+  font-size:13px;
+  color:#f5f5f5;
+}
+
+
+/* 顶部：当前速度 / 当前偏差时间 + 中间箭头，文字不遮盖三角 */
+.scene-flow-header{
+  position:sticky;
+  top:0;
+  z-index:9999;
+
+  background:rgba(0,0,0,0.45);
+  backdrop-filter:blur(10px);
+
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+
+  padding:8px 12px;
+}
+
+
+
+/* 表体 */
+.scene-flow-table{
+  border-radius:6px;
+  overflow:hidden;
+}
+
+
+/* 每一行 */
+.scene-flow-row{
+  display:flex;
+  align-items:center;
+  min-height:36px;        /* 原来是 30px，+20% */
+  padding:4px 12px;       /* 新增这一行，拉高行距 */
+  background:rgba(0,0,0,0.18);
+  border-top:1px dotted rgba(255,255,255,0.2);
+}
+
+
+
+.scene-flow-row:first-child{
+  border-top:none;
+}
+
+.scene-flow-row:nth-child(2n+1){
+  background:rgba(0,0,0,0.26);
+}
+
+
+/* 当前行：整行浅绿底 */
+.scene-flow-row-current{
+  background:#14a549;
+}
+
+/* 当前场景左侧红色小三角指针 */
+.scene-flow-row-current::before{
+  content:"";
+  position:absolute;
+  left:8px;                 /* 越小越靠左，你觉得还想再靠左，可改成 6px、4px */
+  top:50%;
+  transform:translateY(-50%);
+  width:0;
+  height:0;
+  border-top:6px solid transparent;
+  border-bottom:6px solid transparent;
+  border-left:8px solid #ff3b30;  /* 红色小三角，尖头向右 */
+}
+
+.scene-flow-row-current .scene-flow-title{
+  color:#ffffff;      /* 恢复白色 */
+}
+
+
+
+.scene-flow-cell{
+  padding:4px 4px;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+
+/* 左侧色块距离列：色块只比文字略宽 */
+.scene-flow-cell-distance{
+  width:54px;
+  flex:0 0 54px;
+  justify-content:center;
+}
+
+.scene-flow-distance{
+  min-width:44px;
+  padding:4px 6px;
+  border-radius:6px;
+  font-weight:600;
+  font-size:12px;
+  text-align:center;
+  color:#ffffff;
+}
+
+
+.scene-flow-distance-green{  background:#00aa40; }
+
+.scene-flow-distance-yellow{ background:#ffb400; }
+
+.scene-flow-distance-orange{ background:#ff7a00; }
+
+.scene-flow-distance-red{    background:#e02020; }
+
+
+/* 中间标题 + 场景组合 */
+.scene-flow-cell-main{
+  flex:1.9;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:2px;
+}
+
+.scene-flow-title{
+  font-size:14px;
+  font-weight:600;
+  color:#ffffff;                  /* 主文案改成亮白 */
+}
+
+.scene-flow-sub{
+  font-size:12px;                 /* 副文案略大一点 */
+  color:rgba(255,255,255,0.96);   /* 更亮的白字 */
+}
+
+.scene-flow-sub-current {
+    color: #ffffff !important;
+}
+
+
+.scene-flow-length-text-current {
+    color: #ffffff !important;
+}
+
+
+
+
+/* 右侧：距离/时间 */
+/* 右侧：进度条 + 下方数字 */
+.scene-flow-cell-bar{
+  width:64px;
+  flex:0 0 64px;
+  flex-direction:column;
+  align-items:flex-end;
+  justify-content:center;
+  gap:3px;
+}
+
+.scene-flow-bar{
+  width:100%;
+  height:6px;
+  border-radius:999px;
+  background:rgba(255,255,255,0.28);
+  overflow:hidden;
+}
+
+.scene-flow-bar-fill{
+  height:100%;
+  border-radius:999px;
+  background:#00e676;
+}
+
+.scene-flow-length-text{
+  font-size:13px;
+  opacity:0.9;
+  font-variant-numeric:tabular-nums;
+}
+
+/* 当前场景左侧红色三角指针（尖头向右） */
+.scene-flow-row-current{
+  position:relative;
+  background:#14a549;
+  font-weight:600;
+}
+
+
+.scene-flow-row-current::before{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:50%;
+  transform:translateY(-50%);
+  width:0;
+  height:0;
+  border-top:5px solid transparent;
+  border-bottom:5px solid transparent;
+  border-left:7px solid #ff3b30; /* ← 正确：尖头向右 */
+}
+/* ===== Legacy drawer: disable blur ===== */
+.scene-drawer-panel,
+.scene-drawer-header{
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+/* ===== Legacy drawer handle size ===== */
+.scene-drawer-button{
+  width:90px !important;
+  height:30px !important;
+  border-radius:15px !important;
+}
+
+</style>
+
+<style>
+
+/* ===============================
+   LEGACY DRAWER FULL RESTORE CSS
+   =============================== */
+
+/* Base drawer shell */
+.scene-drawer-panel{
+  background: #0f0f0f !important;
+  border-radius: 18px 18px 0 0 !important;
+  box-shadow: 0 -6px 24px rgba(0,0,0,.45) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Header */
+.scene-drawer-header{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  padding: 12px 14px 10px !important;
+  border-bottom: 1px solid rgba(255,255,255,.08) !important;
+  background:#121212 !important;
+}
+
+/* Header text */
+.scene-drawer-header-left,
+.scene-drawer-header-right{
+  font-size:13px !important;
+  color:#e5e5e5 !important;
+  white-space:nowrap;
+}
+
+/* Center arrow */
+.scene-drawer-header-center{
+  flex:0 0 auto !important;
+}
+.scene-drawer-header-arrow{
+  width:18px !important;
+  height:18px !important;
+  border-left:2px solid #aaa !important;
+  border-bottom:2px solid #aaa !important;
+  transform: rotate(135deg) !important;
+}
+
+/* Handle */
+.scene-drawer-button{
+  width:90px !important;
+  height:30px !important;
+  border-radius:15px !important;
+  background:rgba(255,255,255,.12) !important;
+  color:#fff !important;
+  font-size:14px !important;
+  margin:6px auto 8px !important;
+}
+
+/* Drawer inner */
+.drawer-inner,
+.legacy-drawer-inner{
+  padding: 6px 0 14px !important;
+  background:#0f0f0f !important;
+}
+
+/* Scene flow table */
+.scene-flow{
+  padding: 4px 10px 12px !important;
+}
+.scene-flow-table{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+/* Row */
+.scene-flow-row{
+  display:flex;
+  align-items:center;
+  background:#161616 !important;
+  border-radius:12px !important;
+  padding:10px 10px !important;
+}
+
+/* Distance pill */
+.scene-flow-distance{
+  display:inline-block;
+  min-width:46px;
+  text-align:center;
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:600;
+}
+.scene-flow-distance-green{
+  background:#22c55e !important;
+  color:#083a1e !important;
+}
+
+/* Main text */
+.scene-flow-title{
+  font-size:14px !important;
+  color:#f1f1f1 !important;
+  margin-bottom:2px;
+}
+.scene-flow-sub{
+  font-size:12px !important;
+  color:#a1a1a1 !important;
+}
+
+/* Bar */
+.scene-flow-cell-bar{
+  margin-left:auto;
+  text-align:right;
+}
+.scene-flow-bar-bg{
+  width:72px;
+  height:6px;
+  background:#2a2a2a;
+  border-radius:6px;
+  overflow:hidden;
+  margin-bottom:2px;
+}
+.scene-flow-bar-fill{
+  height:100%;
+  background:#22c55e;
+}
+.scene-flow-bar-label{
+  font-size:11px;
+  color:#9ca3af;
+}
+
+/* Current row highlight */
+.scene-flow-row-current{
+  background:#1f2937 !important;
+  outline:1px solid rgba(34,197,94,.6);
+}
+
+</style>
+<style>
+
+/* ===== LEGACY STRUCTURE FIX ===== */
+
+/* Remove any extra vertical gaps */
+.scene-drawer-panel > * + *{
+  margin-top: 0 !important;
+}
+
+/* Header sticks directly to list */
+.scene-drawer-header{
+  margin-bottom: 0 !important;
+}
+
+/* Drawer inner starts immediately */
+.drawer-inner,
+.legacy-drawer-inner{
+  padding-top: 6px !important;
+}
+
+/* Kill any hidden stat remnants */
+.scene-drawer-stats,
+.scene-drawer-stat,
+.scene-drawer-metrics{
+  display:none !important;
+}
+
+</style>
+<style>
+
+/* =========================================================
+   LEGACY DRAWER — MATCH ORIGINAL (profile-aligned)
+   Goal: tighter side edges, subtle row contrast, left column
+         reserved for red triangle, consistent with top profile.
+   ========================================================= */
+
+/* Panel: same family as profile card (semi-transparent, no blur) */
+.scene-drawer-panel{
+  background: rgba(92, 92, 92, 0.58) !important;
+  border-radius: 16px 16px 0 0 !important;
+  box-shadow: 0 -10px 28px rgba(0,0,0,.30) !important;
+}
+
+/* Header bar: thin, consistent, minimal side padding */
+.scene-drawer-header{
+  background: rgba(95, 95, 95, 0.62) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.10) !important;
+  padding: 10px 10px !important; /* less edge space */
+}
+
+/* Inner: tighter edges like original */
+.drawer-inner,
+.legacy-drawer-inner{
+  padding: 8px 8px 14px !important;
+  background: transparent !important;
+}
+
+/* Scene flow: remove extra padding */
+.scene-flow{
+  padding: 0 !important;
+}
+
+/* Row: subtle contrast per-row, not heavy "cards" */
+.scene-flow-row{
+  background: rgba(45, 45, 45, 0.35) !important;
+  border-radius: 10px !important;
+  padding: 10px 10px !important;
+  margin: 0 0 8px 0 !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+}
+
+/* Alternate rows to create gentle "色差" */
+.scene-flow-row:nth-child(even){
+  background: rgba(55, 55, 55, 0.32) !important;
+}
+.scene-flow-row:nth-child(odd){
+  background: rgba(40, 40, 40, 0.30) !important;
+}
+
+/* Left column: reserve space for red triangle */
+.scene-flow-cell-distance{
+  flex: 0 0 78px !important;
+  width: 78px !important;
+  position: relative !important;
+  padding-left: 14px !important;  /* triangle slot */
+}
+
+/* Red triangle indicator for "current" row */
+.scene-flow-row-current .scene-flow-cell-distance::before{
+  content:"";
+  position:absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 8px solid #ef4444;
+}
+
+/* Distance pill: keep bold, centered */
+.scene-flow-distance{
+  min-width: 52px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+}
+
+/* Title/subtitle typography closer to original */
+.scene-flow-title{
+  color: rgba(255,255,255,0.92) !important;
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  line-height: 1.1 !important;
+}
+.scene-flow-sub{
+  color: rgba(255,255,255,0.70) !important;
+  font-size: 12px !important;
+  margin-top: 3px !important;
+}
+
+/* Right bar: slimmer + lighter like original */
+.scene-flow-cell-bar{
+  flex: 0 0 92px !important;
+}
+.scene-flow-bar-bg{
+  width: 82px !important;
+  height: 6px !important;
+  background: rgba(255,255,255,0.22) !important;
+  border-radius: 999px !important;
+}
+.scene-flow-bar-fill{
+  background: rgba(125, 211, 165, 0.75) !important;
+  height: 100% !important;
+  border-radius: 999px !important;
+}
+.scene-flow-bar-label{
+  color: rgba(255,255,255,0.72) !important;
+  font-size: 12px !important;
+  margin-top: 4px !important;
+}
+
+/* Current row: slightly stronger tint (but still subtle) */
+.scene-flow-row-current{
+  background: rgba(24, 90, 58, 0.38) !important;
+  border-color: rgba(255,255,255,0.08) !important;
+  outline: none !important;
+}
+
+
+/* ================= FINAL LEGACY DRAWER POLISH ================= */
+
+/* --- Drawer handle: inverted white triangle --- */
+.scene-drawer-handle{
+  width:0 !important;
+  height:0 !important;
+  border-left:7px solid transparent !important;
+  border-right:7px solid transparent !important;
+  border-top:9px solid rgba(255,255,255,0.95) !important;
+  background:none !important;
+  box-shadow:none !important;
+  margin:4px auto 2px !important;
+}
+
+/* --- Header (speed/time): compact, dark, rounded --- */
+.scene-drawer-header{
+  background: rgba(35,35,35,0.78) !important;
+  border: 1px solid rgba(0,0,0,0.55) !important;
+  border-radius: 14px !important;
+  padding: 6px 10px !important;
+}
+.scene-drawer-header,
+.scene-drawer-header span{
+  font-size: 13px !important;
+  color: rgba(255,255,255,0.9) !important;
+}
+
+/* --- Drawer panel overall --- */
+.scene-drawer-panel{
+  background: rgba(70,70,70,0.46) !important;
+  border-radius: 16px 16px 0 0 !important;
+  box-shadow: 0 -8px 22px rgba(0,0,0,0.25) !important;
+}
+
+/* --- Inner padding: tighter sides --- */
+.drawer-inner,
+.legacy-drawer-inner{
+  padding: 6px 6px 10px !important;
+}
+
+/* --- Row: lower height, subtle contrast --- */
+.scene-flow-row{
+  background: rgba(28,28,28,0.30) !important;
+  border-radius: 10px !important;
+  padding: 6px 8px !important;
+  margin: 0 0 6px 0 !important;
+  border: 1px solid rgba(255,255,255,0.06) !important;
+}
+.scene-flow-row:nth-child(even){
+  background: rgba(38,38,38,0.28) !important;
+}
+
+/* --- Left column: reserve triangle space, reduce width --- */
+.scene-flow-cell-distance{
+  flex: 0 0 70px !important;
+  width: 70px !important;
+  padding-left: 14px !important;
+  position: relative !important;
+}
+
+/* --- Current row triangle --- */
+.scene-flow-row-current .scene-flow-cell-distance::before{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:50%;
+  transform:translateY(-50%);
+  width:0;
+  height:0;
+  border-top:5px solid transparent;
+  border-bottom:5px solid transparent;
+  border-left:7px solid #ef4444;
+}
+
+/* --- Distance pill: grass green + white text --- */
+.scene-flow-distance{
+  background: #34d399 !important;   /* grass green */
+  color: #ffffff !important;
+  min-width: 50px !important;
+  padding: 5px 8px !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+}
+
+/* --- Title & subtitle tighter --- */
+.scene-flow-title{
+  color: rgba(255,255,255,0.92) !important;
+  font-size: 14px !important;
+  font-weight: 650 !important;
+  line-height: 1.1 !important;
+}
+.scene-flow-sub{
+  color: rgba(255,255,255,0.72) !important;
+  font-size: 11.5px !important;
+  margin-top: 2px !important;
+}
+
+/* --- Right bar: slimmer, same green tone --- */
+.scene-flow-cell-bar{
+  flex: 0 0 86px !important;
+}
+.scene-flow-bar-bg{
+  width: 78px !important;
+  height: 5px !important;
+  background: rgba(255,255,255,0.22) !important;
+  border-radius: 999px !important;
+}
+.scene-flow-bar-fill{
+  background: #34d399 !important;   /* same grass green */
+  height: 100% !important;
+  border-radius: 999px !important;
+}
+.scene-flow-bar-label{
+  color: rgba(255,255,255,0.75) !important;
+  font-size: 11.5px !important;
+  margin-top: 3px !important;
+}
+
+/* --- Current row: slightly stronger green tint --- */
+.scene-flow-row-current{
+  background: rgba(16,110,72,0.38) !important;
+}
+
+
+/* ================= FINAL MIRROR POLISH (WEATHER ↔ DRAWER) ================= */
+
+/* === Mirror header to weather bar (same tone, same font, same radius logic) === */
+.scene-drawer-header{
+  background: rgba(95,95,95,0.55) !important;   /* match weather bar */
+  border: none !important;
+  border-radius: 18px 18px 0 0 !important;      /* top round, bottom straight */
+  padding: 8px 14px !important;
+}
+.scene-drawer-header,
+.scene-drawer-header span{
+  font-size: 14px !important;                   /* same as weather */
+  font-weight: 500 !important;
+  color: rgba(255,255,255,0.92) !important;
+}
+
+/* === Drawer handle: inverted white triangle, same size as weather arrow === */
+.scene-drawer-handle{
+  width:0 !important;
+  height:0 !important;
+  border-left:9px solid transparent !important;
+  border-right:9px solid transparent !important;
+  border-top:11px solid rgba(255,255,255,0.95) !important;
+  background:none !important;
+  box-shadow:none !important;
+  margin:6px auto 4px !important;
+}
+
+/* === Drawer panel body: same background family as elevation card === */
+.scene-drawer-panel{
+  background: rgba(90,90,90,0.55) !important;
+  border-radius: 18px 18px 0 0 !important;
+  box-shadow: none !important;
+}
+
+/* === Inner padding: tighter sides === */
+.drawer-inner,
+.legacy-drawer-inner{
+  padding: 6px 6px 8px !important;
+}
+
+/* === Scene rows: darker, closer to elevation bg === */
+.scene-flow-row{
+  background: rgba(70,70,70,0.55) !important;
+  border-radius: 12px !important;
+  padding: 8px 10px !important;
+  margin: 0 0 4px 0 !important;
+  border: none !important;
+}
+
+/* === Left column: narrower, triangle closer === */
+.scene-flow-cell-distance{
+  flex: 0 0 64px !important;
+  width: 64px !important;
+  padding-left: 12px !important;
+  position: relative !important;
+}
+
+/* Red triangle indicator */
+.scene-flow-row-current .scene-flow-cell-distance::before{
+  content:"";
+  position:absolute;
+  left:2px;
+  top:50%;
+  transform:translateY(-50%);
+  border-top:6px solid transparent;
+  border-bottom:6px solid transparent;
+  border-left:8px solid #ff3b30; /* iOS red */
+}
+
+/* === Distance pill: Apple system green, less round, forward === */
+.scene-flow-distance{
+  background: #34C759 !important;     /* iOS system green */
+  color: #ffffff !important;
+  min-width: 48px !important;
+  padding: 6px 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  margin-left: -4px !important;
+}
+
+/* === Text sizing === */
+.scene-flow-title{
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: rgba(255,255,255,0.95) !important;
+}
+.scene-flow-sub{
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.80) !important;
+  margin-top: 2px !important;
+}
+
+/* === Progress bar: same system green === */
+.scene-flow-cell-bar{
+  flex: 0 0 84px !important;
+}
+.scene-flow-bar-bg{
+  width: 76px !important;
+  height: 6px !important;
+  background: rgba(255,255,255,0.25) !important;
+}
+.scene-flow-bar-fill{
+  background: #34C759 !important;
+}
+.scene-flow-bar-label{
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+
+/* === Current row emphasis === */
+.scene-flow-row-current{
+  background: rgba(60,120,90,0.65) !important;
+}
+
+
+/* ================= HANDLE + HEADER FINAL FIX ================= */
+
+/* ===== Collapsed (before open): upward white triangle on weather-tone bar ===== */
+.scene-drawer-collapsed{
+  background: rgba(95,95,95,0.55) !important; /* same as weather bar */
+  border-radius: 18px !important;
+}
+.scene-drawer-collapsed .scene-drawer-handle{
+  width:0 !important;
+  height:0 !important;
+  border-left:11px solid transparent !important;
+  border-right:11px solid transparent !important;
+  border-bottom:13px solid rgba(255,255,255,0.95) !important; /* upward */
+  border-top:none !important;
+  margin:8px auto !important;
+}
+
+/* ================================
+ * @deprecated
+ * OLD scene-drawer-header styling
+ * DO NOT USE – kept for rollback only
+ * ================================ */
+
+/*
+.scene-drawer-header{
+  background: rgba(95,95,95,0.55) !important;
+  border-radius: 18px 18px 0 0 !important;
+  padding: 8px 14px !important;
+}
+
+.scene-drawer-header .scene-drawer-handle{
+  width:0 !important;
+  height:0 !important;
+  border-left:11px solid transparent !important;
+  border-right:11px solid transparent !important;
+  border-top:13px solid rgba(255,255,255,0.95) !important;
+  border-bottom:none !important;
+  margin:6px auto 4px !important;
+}
+
+.scene-drawer-header,
+.scene-drawer-header span{
+  font-size:14px !important;
+  font-weight:500 !important;
+  color:rgba(255,255,255,0.92) !important;
+}
+*/
+
+</style>
+</head>
+
+<body>
+<div class="page">
+
+  <div class="map-wrapper">
+    <div id="map"></div>
+
+          <!-- === 抽屉内容层（半透明 + 覆盖地图 1/3）=== -->
+    <div class="scene-drawer-panel" id="sceneDrawerPanel">
+  <div class="scene-drawer-header">
+    <div class="scene-drawer-header-left" id="sceneSpeedDisplay" data-pace-min-per-km="" data-mode="pace">当前行进速度：--/km</div>
+    <div class="scene-drawer-header-center"><button class="scene-drawer-header-button" id="sceneDrawerClose"><span class="scene-drawer-header-arrow"></span></button></div>
+    <div class="scene-drawer-header-right" id="sceneTimeDeviation">当前偏差时间：--</div>
+  </div>
+<!-- LEGACY STRUCTURE: header + list only -->
+
+  <div class="drawer-inner legacy-drawer-inner" id="dynamicDrawerContent">
+    <div style="text-align:center; color:rgba(255,255,255,0.4); padding-top:40px; font-size:13px;">等待行走数据...</div>
+  </div>
+</div>
+
+
+
+
+
+
+    <div class="stats-card" id="statsCard">
+      里程：<strong id="statDistance">-- / -- km</strong><br/>
+      海拔：<strong id="statAlt">-- / -- m</strong><br/>
+      天气：<strong id="statWeather">--</strong><br/>
+      <!-- 高差暂时隐藏 -->
+      <span class="stat-gain-line" style="display:none;">
+        高差：<strong id="statGain">-- / -- m</strong>
+      </span>
+    </div>
+
+    <!-- 顶部 1/4 半透明路线剖面图 -->
+    <div class="elev-panel" id="elevPanel">
+      <div class="elev-panel-header">
+        <div class="elev-panel-title" id="elevTitle"></div>
+        <div class="elev-panel-close" id="elevClose">✕</div>
+      </div>
+
+      <canvas id="elevCanvas"></canvas>
+<!-- 天气栏：动态写入天气数据 -->
+<div class="elev-weather-text" id="elevWeatherText"></div>
+
+
+      <!-- 剖面小圆点标签 -->
+      <div class="elev-tooltip" id="elevTooltip" style="display:none;">
+        里程 0 km<br>海拔 0 m<br>坡度 0%
+      </div>
+    </div>
+
+    <div class="map-tools">
+      <button class="tool-btn north-btn" id="btnNorth">
+        <span class="north-arrow">▲</span>
+        <span class="north-label">N</span>
+      </button>
+
+      <button class="tool-btn" id="btnLayerToggle">SAT</button>
+
+      <!-- 节点图层开关按钮 -->
+      <button class="tool-btn" id="btnNodeToggle">
+        <span class="icon-layerstack">
+          <span class="layer"></span>
+          <span class="layer"></span>
+          <span class="layer"></span>
+        </span>
+      </button>
+    </div>
+
+    <div class="map-tools-bottom">
+      <button class="tool-round" id="btnCache" title="缓存当前视野地图">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 5v14m0 0l-6-6m6 6l6-6"/>
+          <path d="M5 19h14"/>
+        </svg>
+      </button>
+
+      <button class="tool-round" id="btnPlay" title="播放路线讲解">
+        <svg viewBox="0 0 24 24"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="2"
+             stroke-linecap="round"
+             stroke-linejoin="round">
+          <polygon points="7 5 19 12 7 19 7 5"></polygon>
+        </svg>
+      </button>
+
+      <button class="tool-round" id="btnLocateRoute" title="定位到当前位置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M12 2v3"></path>
+          <path d="M12 19v3"></path>
+          <path d="M5 12H2"></path>
+          <path d="M22 12h-3"></path>
+        </svg>
+      </button>
+    </div>
+
+    <div class="cache-status" id="cacheStatus">状态</div>
+
+    <!-- 底部场景抽屉小按钮 -->
+    <div class="scene-drawer-handle" id="sceneDrawerHandle">
+      <div class="scene-drawer-button">
+        <span class="scene-drawer-arrow"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全屏视频层 -->
+  <div class="video-overlay" id="videoOverlay">
+    <div class="video-container">
+      <video
+        id="routeVideo"
+        src="assets/video/intro.mp4"
+        playsinline
+        webkit-playsinline
+      ></video>
+
+      <div class="video-controls" id="videoControls">
+        <button class="video-btn-icon" id="videoBtnBack">
+          <span class="icon-shape icon-back"></span>
+        </button>
+
+        <button class="video-btn-icon" id="videoBtnPlayPause">
+          <span class="icon-shape icon-play" id="iconPlayPause"></span>
+        </button>
+
+        <button class="video-btn-icon" id="videoBtnForward">
+          <span class="icon-shape icon-forward"></span>
+        </button>
+
+        <button class="video-btn-speed" id="videoBtnSpeed">
+          <span id="videoSpeedLabel">1.0</span>
+        </button>
+
+        <button class="video-btn-close" id="videoBtnClose">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn tab-btn-ghost"  data-href="pretrip.html">行前准备</button>
+    <button class="tab-btn tab-btn-primary" data-href="route.html">徒步向导</button>
+    <button class="tab-btn tab-btn-ghost"  data-href="guide.html">带路宝典</button>
+  </div>
+</div>
+
+<script>
+  console.log("🔥 JS START");
+
+  /* ============================================================
+ * ① 读取 URL 参数中提供的 JSON，并加载成为路线模型
+ * 用法示例：
+ * route.html?json=ROUTE_NODES.json
+ * ============================================================ */
+async function loadRouteModel() {
+const jsonUrl = "routes/route_chino/track.json";
+
+  try {
+    const res = await fetch(jsonUrl);
+    if (!res.ok) throw new Error("无法加载 JSON：" + jsonUrl);
+    const model = await res.json();
+    console.log("✅ 成功加载路线 JSON：", jsonUrl);
+    return model;
+  } catch (err) {
+    console.error(err);
+    return null;
+  }
+}
+
+  // 禁用长按弹出浏览器默认菜单（如 Copy / Find Selection / 加大头针）
+  document.addEventListener("contextmenu", function(e){
+    e.preventDefault();
+  }, { passive:false });
+
+  (async function(){
+     window.routeLatLngs = [];
+  console.log("🔥 init routeLatLngs");
+
+  // ===== 强制清空左上角卡片（切断 HTML 演示值）====
+    const cfgHome = (window.ROUTE_GUIDE_CONFIG && window.ROUTE_GUIDE_CONFIG.home) || {};
+
+    
+
+    const tUsedRaw = cfgHome.timeUsed || 0;
+    const tPlanRaw = cfgHome.timePlanned || 0;
+    const tUsed = Number(tUsedRaw).toFixed(1);
+    const tPlan = Number(tPlanRaw).toFixed(1);
+
+    const a1 = cfgHome.minAltitude || "--";
+    const a2 = cfgHome.maxAltitude || "--";
+
+    const h1 = cfgHome.elevationDiff || "--";
+    const h2 = cfgHome.elevationAlt || "--";
+   
+
+
+  
+    const statGainEl = document.getElementById("statGain");
+    if (statGainEl){
+   statGainEl.textContent = `-- / -- m`;
+
+    }
+
+    const outdoorUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+    const satUrl     = "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+    let map, outdoorLayer, satLayer;
+    let currentLayer = "outdoor";
+    let routeBounds  = null;
+    let userMarker   = null;
+
+    // ==============================
+    // 路线轨迹（全局可调试）
+    // ==============================
+    let routeLatLngs = [];
+    window.routeLatLngs = routeLatLngs;
+
+    // ==============================
+    // 徒步起点 / 进度计算：状态变量（Step 1）
+    // ==============================
+    let routeStartIndex = null;   // 徒步起点在 routeLatLngs 中的索引（与 elevPoints 同步）
+    let routeStartKm    = 0;      // 徒步起点对应的 km（来自 elevPoints[index].dist）
+    let isOnRoute       = false;  // 是否已进入徒步轨迹（<=100m 视为进入）
+
+    // 👉 同步到 window，便于 Console 调试 & 后续函数使用
+    window.routeStartIndex = routeStartIndex;
+    window.routeStartKm    = routeStartKm;
+    window.isOnRoute       = isOnRoute;
+
+    // 后续状态变更时统一同步（Step 2 会用）
+    function syncRouteStateToWindow(){
+      window.routeStartIndex = routeStartIndex;
+      window.routeStartKm    = routeStartKm;
+      window.isOnRoute       = isOnRoute;
+    }
+
+    let sceneNodeLayer    = null;
+    let sceneNodeMarkers  = [];
+
+    let elevPoints    = [];
+    window.elevPoints = elevPoints; // 供进度球映射使用（只读）
+    let elevTotalDist = 0;
+    window.elevTotalDist = elevTotalDist; // 供进度球映射使用（只读）
+    let cursorDist        = null;
+    let cursorInfo        = null;
+    let currentProgressKm = 0;
+
+    const centerLat = cfgHome.centerLat || -39.2815;
+    const centerLng = cfgHome.centerLng || 175.5703;
+    const startZoom = cfgHome.mapZoom   || 12;
+// ==============================
+// Step 2：GPS → 路线投影 → 起点判定 → 进度计算 → 左上角卡片更新
+// 目标：不改你现有 JSON/profile/track/剖面，只补计算和显示
+// ==============================
+
+// ① 每次切换路线 / 重载路线，都要重置（保证多路线顺滑）
+function resetRouteProgressState(){
+  routeStartIndex = null;
+  routeStartKm    = 0;
+  isOnRoute       = false;
+  syncRouteStateToWindow();
+}
+
+// ② GPS 投影到路线：找最近的 routeLatLngs 点（返回 index + 偏离距离米）
+function projectGpsToRoute(lat, lng){
+  if (!routeLatLngs || routeLatLngs.length < 2) return null;
+
+  let minM = Infinity;
+  let bestIdx = -1;
+
+  for (let i = 0; i < routeLatLngs.length; i++){
+    const p = routeLatLngs[i];
+    const dM = distanceKm(lat, lng, p[0], p[1]) * 1000; // km → m
+    if (dM < minM){
+      minM = dM;
+      bestIdx = i;
+    }
+  }
+
+  if (bestIdx < 0) return null;
+  return { index: bestIdx, offsetM: minM };
+}
+
+// ③ 根据 GPS 计算 “已完成里程 doneKm”
+// 规则：
+// - 未到起点：返回 null（卡片显示 --/total）
+// - 首次进入 <=100m：锁定 routeStartIndex/routeStartKm
+// - 偏离 >100m：doneKm 显示为负值（-偏离公里）
+function calcDoneKmFromGps(lat, lng){
+  if (!elevPoints || elevPoints.length < 2) return null;
+
+  const proj = projectGpsToRoute(lat, lng);
+  if (!proj) return null;
+
+  const idx = proj.index;
+  const offsetM = proj.offsetM;
+
+  // 进入徒步轨迹（<=100m 才算开始）
+  if (!isOnRoute){
+    if (offsetM > 100) return null;
+
+    isOnRoute = true;
+    routeStartIndex = idx;
+    routeStartKm = (elevPoints[idx] && typeof elevPoints[idx].dist === "number") ? elevPoints[idx].dist : 0;
+    syncRouteStateToWindow();
+  }
+
+  // 正常完成里程：当前位置 km - 起点 km
+  const curKm = (elevPoints[idx] && typeof elevPoints[idx].dist === "number") ? elevPoints[idx].dist : 0;
+  let doneKm = curKm - routeStartKm;
+
+  // 偏离：显示负值
+  if (offsetM > 100){
+    doneKm = - (offsetM / 1000);
+  }
+
+  return { doneKm, idx, offsetM };
+}
+
+// ④ 统一刷新左上角卡片（里程 + 海拔）
+// - 未到起点：-- / total
+// - 到起点后：done / total
+// - 海拔：当前 ele / 全程最高点（你也可改成总爬升，后续再做）
+function updateStatsCardByGps(lat, lng, tsMs){
+  console.log(
+  "[GPS→Stats]",
+  "lat=", lat.toFixed(5),
+  "lng=", lng.toFixed(5)
+);
+  const totalKm = (typeof elevTotalDist === "number" && elevTotalDist > 0)
+    ? elevTotalDist
+    : (elevPoints && elevPoints.length ? (elevPoints[elevPoints.length - 1].dist || 0) : 0);
+
+  const distEl = document.getElementById("statDistance");
+  const altEl  = document.getElementById("statAlt");
+  if (!distEl) return;
+
+  const res = calcDoneKmFromGps(lat, lng);
+
+  // 未到起点
+  if (!res){
+    distEl.textContent = `-- / ${totalKm.toFixed(1)} km`;
+    return;
+  }
+
+  // 里程
+  distEl.textContent = `${res.doneKm.toFixed(1)} km / ${totalKm.toFixed(1)} km`;
+
+  // 海拔（当前 / 最高）
+  if (altEl && elevPoints && elevPoints.length){
+    const curEle = elevPoints[res.idx] ? elevPoints[res.idx].ele : null;
+    let maxEle = -Infinity;
+    for (let i = 0; i < elevPoints.length; i++){
+      const e = elevPoints[i] ? elevPoints[i].ele : null;
+      if (typeof e === "number" && e > maxEle) maxEle = e;
+    }
+    if (typeof curEle === "number" && isFinite(maxEle)){
+      altEl.textContent = `${Math.round(curEle)} m / ${Math.round(maxEle)} m`;
+    }
+  }
+
+  // 同步剖面竖线（负值偏离时：剖面保持 0，不倒退）
+  currentProgressKm = Math.max(0, res.doneKm);
+  if (window.setProgressKm){ setProgressKm(currentProgressKm, "gps"); } else { updateCursorByDist(currentProgressKm); }
+
+  // ✅ 真实速度/时间：投喂 doneKm（只依赖 GPS→轨迹投影结果，不用任何假数据）
+  if (typeof window.__RM_feed === "function"){
+    window.__RM_feed(res.doneKm, tsMs);
+  }
+}
+
+/* ============================================================
+ * UI_STATE：统一 UI 状态源（当前仅接管速度/配速）
+ * ============================================================ */
+window.UI_STATE = {
+  speedKmh: null,        // 当前速度 km/h
+  paceMinPerKm: null,    // 当前配速 min/km
+  active: false          // 是否已激活（>=100m）
+};
+
+    
+
+/* ============================================================
+ * ⑤ 真实行进统计（速度/配速/已用时间/偏差/停顿）——最小侵入版
+ * 依赖：calcDoneKmFromGps() + updateStatsCardByGps() 中得到的 res.doneKm
+ * 激活规则：沿轨迹方向累计前进 >= 0.1km（100m）后开始计时与计速
+ * 目的：让左上角速度与抽屉右上角时间只来自真实 GPS + 轨迹投影结果
+ * ============================================================ */
+(function(){
+  const SPEED_PAUSE_KMH = 0.3;      // 低于此速度视为停顿（过滤漂移）
+  const ACTIVATE_KM = 0.1;          // 100m
+  const MAX_DT_SEC = 15;            // 超过这个间隔，当作断点（不用于速度累积）
+  const EWM_ALPHA = 0.25;           // 速度平滑系数（越大越灵敏）
+
+  function fmtUsedPlanned(usedSec, plannedSec){
+    return `已用时间 ${fmtHMS(usedSec)} / ${fmtHMS(plannedSec)}`;
+  }
+  function fmtDeviationPause(devSec, pauseSec){
+    return `当前偏差时间 ${fmtSignedMin(devSec)} / 累计停顿 ${fmtMin(pauseSec)}`;
+  }
+  function fmtHMS(sec){
+    if (!Number.isFinite(sec) || sec < 0) return "--";
+    const h = Math.floor(sec/3600);
+    const m = Math.floor((sec%3600)/60);
+    // 小于1小时：显示 mm'm；否则：显示 h:mm
+    if (h <= 0) return `${m}′`;
+    return `${h}:${String(m).padStart(2,'0')}h`;
+  }
+  function fmtMin(sec){
+    if (!Number.isFinite(sec) || sec < 0) return "--";
+    const m = Math.round(sec/60);
+    return `${m}′`;
+  }
+  function fmtSignedMin(sec){
+    if (!Number.isFinite(sec)) return "--";
+    const sign = sec >= 0 ? "+" : "−";
+    const m = Math.round(Math.abs(sec)/60);
+    // 小于 60 分钟：显示 15′；否则：显示 1.5h（保留 1 位）
+    if (m < 60) return `${sign}${m}′`;
+    const h = Math.round((m/60)*10)/10;
+    return `${sign}${h}h`;
+  }
+  function paceFromSpeedKmh(kmh){
+    if (!Number.isFinite(kmh) || kmh <= 0) return null;
+    return 60 / kmh; // min / km
+  }
+  function kmhFromPaceMinPerKm(p){
+    if (!Number.isFinite(p) || p <= 0) return null;
+    return 60 / p;
+  }
+
+  // 全局状态：只在这里维护，避免污染其他逻辑
+  const S = window.__REAL_MOVE_STATE = window.__REAL_MOVE_STATE || {
+    // 激活门槛
+    active:false,
+    startDoneKm:null,         // 首次命中起点后的 doneKm
+    lastDoneKm:null,
+    lastTsMs:null,
+
+    // 累计
+    movingDistKm:0,
+    movingSec:0,
+    pausedSec:0,
+
+    // 平滑速度
+    ewSpeedKmh:null,
+
+    // 计划总时间（秒）
+    plannedTotalSec:null
+  };
+
+  // 从 config 读取计划时间（小时），只读一次（如果你后面换配置来源，只改这里）
+  function ensurePlannedTotalSec(){
+    if (Number.isFinite(S.plannedTotalSec)) return;
+    const cfgHome = (window.ROUTE_GUIDE_CONFIG && window.ROUTE_GUIDE_CONFIG.home) || {};
+    const h = Number(cfgHome.timePlanned);
+    S.plannedTotalSec = Number.isFinite(h) && h > 0 ? Math.round(h * 3600) : null;
+  }
+
+  // 统一更新左上角速度/配速显示（不直接改别的 UI）
+  function updateSpeedUI(kmh){
+    const el = document.getElementById("sceneSpeedDisplay");
+    if (!el) return;
+
+    if (!Number.isFinite(kmh) || kmh <= 0){
+      el.textContent = "当前行进速度：--";
+      el.setAttribute("data-pace-min-per-km", "");
+      el.setAttribute("data-mode", "speed");
+      return;
+    }
+
+    const pace = paceFromSpeedKmh(kmh);
+    if (pace){
+      el.setAttribute("data-pace-min-per-km", String(Math.round(pace*10)/10));
+    }
+
+    const mode = el.getAttribute("data-mode") || "speed";
+    if (mode === "pace" && pace){
+      // 配速：小于 60 分钟显示 30′/km；大于显示 1.5h/km
+      const m = pace;
+      let pStr;
+      if (m < 60) pStr = `${Math.round(m)}′/km`;
+      else pStr = `${Math.round((m/60)*10)/10}h/km`;
+      el.textContent = "当前行进配速：" + pStr;
+    } else {
+      el.textContent = "当前行进速度：" + (Math.round(kmh*10)/10).toFixed(1) + " km/h";
+      el.setAttribute("data-mode", "speed");
+    }
+  }
+
+  // 统一更新抽屉右上角时间显示（不直接改别的 UI）
+  function updateTimeUI(){
+    const el = document.getElementById("sceneTimeDeviation");
+    if (!el) return;
+    ensurePlannedTotalSec();
+
+    if (!S.active){
+      el.textContent = "已用时间 -- / --";
+      el.setAttribute("data-mode", "used");
+      return;
+    }
+
+    const usedSec = S.movingSec + S.pausedSec;
+    const plannedTotal = S.plannedTotalSec;
+
+    // 计算“当前偏差”：对比“按进度比例的计划时间”
+    let devSec = null;
+    if (Number.isFinite(plannedTotal) && plannedTotal > 0 && typeof window.currentProgressKm === "number"){
+      const totalKm = (typeof window.elevTotalDist === "number" && window.elevTotalDist > 0)
+        ? window.elevTotalDist
+        : null;
+      if (Number.isFinite(totalKm) && totalKm > 0){
+        const plannedAtNow = plannedTotal * (Math.max(0, window.currentProgressKm) / totalKm);
+        devSec = usedSec - plannedAtNow;
+      }
+    }
+
+    const mode = el.getAttribute("data-mode") || "used";
+    if (mode === "dev"){
+      el.textContent = fmtDeviationPause(devSec, S.pausedSec);
+    } else {
+      el.textContent = fmtUsedPlanned(usedSec, plannedTotal);
+      el.setAttribute("data-mode", "used");
+    }
+  }
+
+  // 点击切换：速度 ↔ 配速
+  // 你原来的 click 逻辑仍在，但它依赖 data-pace-min-per-km。
+  // 为避免“有两套 click 互相打架”，这里不再加第二个监听器。
+  // 我们只保证 data-pace-min-per-km 始终来自真实数据。
+
+  // 点击切换：已用/计划 ↔ 偏差/停顿
+  (function bindTimeToggle(){
+    const el = document.getElementById("sceneTimeDeviation");
+    if (!el) return;
+    el.addEventListener("click", function(){
+      const mode = el.getAttribute("data-mode") || "used";
+      el.setAttribute("data-mode", mode === "used" ? "dev" : "used");
+      updateTimeUI();
+    });
+  })();
+
+  // 供外部（updateStatsCardByGps）调用：每次 GPS 更新后，投喂 doneKm + timestamp
+  window.__RM_feed = function(doneKm, tsMs){
+    ensurePlannedTotalSec();
+
+    const t = Number.isFinite(tsMs) ? tsMs : Date.now();
+
+    // 未命中起点：重置显示为 --
+    if (!Number.isFinite(doneKm)){
+      S.active = false;
+      S.startDoneKm = null;
+      S.lastDoneKm = null;
+      S.lastTsMs = null;
+      S.movingDistKm = 0;
+      S.movingSec = 0;
+      S.pausedSec = 0;
+      S.ewSpeedKmh = null;
+      updateSpeedUI(null);
+      updateTimeUI();
+      return;
+    }
+
+    // 首次初始化
+    if (!Number.isFinite(S.startDoneKm)){
+      S.startDoneKm = doneKm;
+      S.lastDoneKm = doneKm;
+      S.lastTsMs = t;
+      S.active = false;
+      updateSpeedUI(null);
+      updateTimeUI();
+      return;
+    }
+
+    const dtSec = (t - S.lastTsMs) / 1000;
+    const dKmRaw = doneKm - S.lastDoneKm;
+
+    // 更新 last
+    S.lastDoneKm = doneKm;
+    S.lastTsMs = t;
+
+    if (!Number.isFinite(dtSec) || dtSec <= 0) return;
+
+    // 间隔过大：视为断点，只更新 UI，不参与累积（避免跳点导致假高速）
+    if (dtSec > MAX_DT_SEC){
+      updateSpeedUI(S.ewSpeedKmh);
+      updateTimeUI();
+      return;
+    }
+
+    // 激活判断：只累计“向前进度”（dKmRaw > 0）
+    if (!S.active){
+      if (dKmRaw > 0){
+        const forwardKm = doneKm - S.startDoneKm;
+        if (forwardKm >= ACTIVATE_KM){
+          S.active = true;
+          // 激活瞬间不把热身段纳入统计：从此刻开始计时
+          S.movingDistKm = 0;
+          S.movingSec = 0;
+          S.pausedSec = 0;
+          S.ewSpeedKmh = null;
+        }
+      }
+      updateSpeedUI(null);
+      updateTimeUI();
+      return;
+    }
+
+    // 统计：速度用“绝对移动距离”更符合折返/反穿场景（行为真实）
+    const dKm = Math.abs(dKmRaw);
+    const instKmh = dKm / (dtSec / 3600);
+
+    // 停顿：速度过低视为停顿
+    if (instKmh < SPEED_PAUSE_KMH){
+      S.pausedSec += dtSec;
+      // 停顿期间不更新 ewSpeed（避免拖慢）
+      updateSpeedUI(S.ewSpeedKmh);
+      updateTimeUI();
+      return;
+    }
+
+    // 移动累计
+    S.movingDistKm += dKm;
+    S.movingSec += dtSec;
+
+    // 平滑速度：指数加权
+    if (!Number.isFinite(S.ewSpeedKmh)) S.ewSpeedKmh = instKmh;
+    else S.ewSpeedKmh = S.ewSpeedKmh * (1 - EWM_ALPHA) + instKmh * EWM_ALPHA;
+
+    updateSpeedUI(S.ewSpeedKmh);
+    updateTimeUI();
+  };
+
+  // 初始 UI 设为 --
+  updateSpeedUI(null);
+  updateTimeUI();
+})();
+
+
+function initBaseMap(){
+      map = L.map("map", {
+        zoomControl:false,
+        attributionControl:true,
+        maxZoom:19,
+        minZoom:3
+      }).setView([centerLat, centerLng], startZoom);
+      window.map = map; // 供进度球等模块订阅使用
+
+      outdoorLayer = L.tileLayer(outdoorUrl, {
+        subdomains:"abc",
+        minZoom:3,
+        maxZoom:19,
+        attribution:"Tiles © OpenStreetMap contributors"
+      }).addTo(map);
+
+      satLayer = L.tileLayer(satUrl, {
+        minZoom:3,
+        maxZoom:19,
+        attribution:"Imagery © Esri"
+      });
+
+      L.circleMarker([centerLat, centerLng], {
+        radius:5,
+        color:"#ef4444",
+        weight:3,
+        fillOpacity:0.8
+      }).addTo(map);
+
+      map.attributionControl.setPosition("bottomright");
+    }
+
+// === JSON → 老内部模型 适配层 ===
+function adaptJsonToLegacyModel(raw) {
+  if (!raw) return null;
+
+  // ⭐ 唯一正确的轨迹来源
+ // ✅ profile 就是轨迹源
+const srcTrack = Array.isArray(raw.profile)
+  ? raw.profile
+  : [];
+
+
+  console.log("✅ 使用 raw.path.points 作为轨迹，点数 =", srcTrack.length);
+
+ // 🌤 天气节点：兼容多来源（最终版）
+let weatherNodes = [];
+
+// ① 顶层 weatherNodes（如果你以后单独导出）
+if (Array.isArray(raw.weatherNodes)) {
+  weatherNodes = raw.weatherNodes;
+}
+
+// ② nodes 里带 type = weather
+else if (Array.isArray(raw.nodes)) {
+  weatherNodes = raw.nodes.filter(n =>
+    n.type === "weather" ||
+    n.nodeType === "weather" ||
+    n.zType === "Z_WEATHER"
+  ).map(n => ({
+    km: Number(n.km ?? n.positionKm ?? 0),
+    shortName: n.shortName || n.summary || n.weather || "",
+    raw: n
+  }));
+}
+
+
+// ✅ 生成“场景节点”（人工/地形等），不含天气节点（天气走 weatherNodes）
+// 支持 JSON 结构：raw.nodes（旧） / raw.manualScenes（人工） / raw.segments（地形段）
+function buildSceneNodes(raw){
+  const out = [];
+
+  // ① 旧结构：raw.nodes（如果存在就直接并入，但会过滤掉 weather）
+  if (raw && Array.isArray(raw.nodes)){
+    raw.nodes.forEach(n=>{
+      if (!n) return;
+      const t = String(n.nodeType || n.type || "").toLowerCase();
+      if (t === "weather") return;
+      out.push(n);
+    });
+  }
+
+  // ② 人工场景节点：raw.manualScenes
+  if (raw && Array.isArray(raw.manualScenes)){
+    raw.manualScenes.forEach(s=>{
+      if (!s) return;
+      out.push({
+        nodeType: "manual",
+        shortName: s.title || s.shortName || s.name || "(未命名)",
+        desc: s.desc || s.description || "",
+        // 坐标（优先直接用）
+        startLat: (s.startLat != null ? Number(s.startLat) : undefined),
+        startLon: (s.startLon != null ? Number(s.startLon) : undefined),
+        // 里程（兜底）
+        positionKm: (s.startKm != null ? Number(s.startKm) : undefined),
+        startKm: (s.startKm != null ? Number(s.startKm) : undefined),
+        endKm: (s.endKm != null ? Number(s.endKm) : undefined),
+        raw: s
+      });
+    });
+  }
+
+  // ③ 地形段节点：raw.segments（用 startPt / startKm 作为“段起点标签”）
+  if (raw && Array.isArray(raw.segments)){
+    raw.segments.forEach(seg=>{
+      if (!seg) return;
+      const sp = seg.startPt || {};
+      out.push({
+        nodeType: "terrain",
+        shortName: seg.shortName || seg.title || seg.terrainType || seg.surfaceType || "(地形)",
+        desc: seg.desc || seg.description || seg.terrainType || "",
+        startPt: (sp && sp.lat!=null && sp.lon!=null) ? {lat:Number(sp.lat), lon:Number(sp.lon)} : undefined,
+        startKm: (seg.startKm != null ? Number(seg.startKm) : undefined),
+        positionKm: (seg.startKm != null ? Number(seg.startKm) : undefined),
+        endKm: (seg.endKm != null ? Number(seg.endKm) : undefined),
+        raw: seg
+      });
+    });
+  }
+
+  return out;
+}
+
+return {
+  track: srcTrack.map(p => ({
+    lat: Number(p.lat),
+    lon: Number(p.lon)
+  })),
+  profile: Array.isArray(raw.profile) ? raw.profile : [],
+  nodes: buildSceneNodes(raw),
+  weatherNodes
+};
+
+}
+
+
+    /* ============================================================
+ * JSON 专用：剖面图渲染 renderProfile()
+ * 替代缺失的 GPX 剖面函数，避免“renderProfile 未定义”错误
+ * 不影响原有 GPX 流程
+ * ============================================================ */
+
+
+
+
+/* ============================================================
+ * ② 如果加载到了 JSON，则用 JSON.profile / nodes / track 覆盖 GPX
+ *    并返回一个布尔值告诉外面“有没有用上 JSON”
+ * ============================================================ */
+async function tryRenderRouteFromJson() {
+  const rawModel = await loadRouteModel();
+  const model = adaptJsonToLegacyModel(rawModel);
+
+  // 入口判断：有没有 JSON
+  if (!model) {
+    console.warn("❌ 没有加载到 JSON，回退 GPX");
+    window.USE_JSON_ROUTE = false;
+    return false;
+  }
+
+  window.USE_JSON_ROUTE = true;
+  window.__model = model;
+  console.log("✅ 使用 JSON 路线模型（已适配）：", model);
+
+  /* ============================================================
+   * ① Profile（剖面 / 里程 / 海拔）
+   * ============================================================ */
+  if (Array.isArray(model.profile) && model.profile.length > 0) {
+    console.log("使用 JSON profile，点数 =", model.profile.length);
+    renderProfile(model.profile);
+  } else {
+    console.warn("JSON 中没有 profile 字段");
+  }
+
+  /* ============================================================
+   * ② Nodes（只负责节点本身：人工 / 地形 / 天气
+   *     ⚠️ 节点内部怎么画，由 renderNodesFromJson 决定
+   * ============================================================ */
+  if (typeof renderNodesFromJson === "function") {
+    renderNodesFromJson(model);
+  }
+
+  /* ============================================================
+   * ③ Track（地图红线）
+   *     ⚠️ 不与 nodes / profile 互相影响
+   * ============================================================ */
+  if (
+    typeof renderTrackFromJson === "function" &&
+    Array.isArray(model.track) &&
+    model.track.length >= 2
+  ) {
+    renderTrackFromJson(model);
+  } else {
+    console.warn("JSON 中没有有效 track，仅不显示路线");
+  }
+
+  return true;
+}
+
+
+
+
+/* ============================================================
+ * JSON.profile → 写入 elevPoints / elevTotalDist 并绘制剖面图
+ * ============================================================ */
+function renderProfile(profileArr) {
+  if (!Array.isArray(profileArr) || profileArr.length === 0) {
+    console.warn("renderProfile：profile 数据为空");
+    return;
+  }
+
+  // ===== 1️⃣ profile → elevPoints（唯一海拔数据源）=====
+  elevPoints = profileArr.map(p => ({
+    dist: Number(p.km ?? p.dist ?? 0),
+    ele:  Number(
+      p.ele ??
+      p.elevation ??
+      p.altitude ??
+      p.alt ??
+      0
+    )
+  }));
+
+  // ===== 总里程：优先使用 JSON.meta.distanceKm =====
+const metaDistKm =
+  window.__model &&
+  window.__model.meta &&
+  typeof window.__model.meta.distanceKm === "number"
+    ? window.__model.meta.distanceKm
+    : null;
+
+elevTotalDist = metaDistKm != null
+  ? metaDistKm
+  : elevPoints[elevPoints.length - 1].dist;
+
+    window.elevTotalDist = elevTotalDist;
+  console.log("JSON profile 已写入 elevPoints，总距离 =", elevTotalDist);
+
+  // ===== 2️⃣ 初始化左上角【里程】=====
+  const distEl = document.getElementById("statDistance");
+  if (distEl && elevTotalDist > 0) {
+    distEl.textContent = `0.0 km / ${elevTotalDist.toFixed(1)} km`;
+  }
+
+  // ===== 3️⃣ 初始化左上角【海拔：当前 / 最高】=====
+  const altEl = document.getElementById("statAlt");
+  if (altEl && elevPoints.length > 0) {
+    const startEle = elevPoints[0].ele;
+// ===== 最高海拔：优先使用 JSON.meta.maxEle =====
+let metaMaxEle =
+  window.__model &&
+  window.__model.meta &&
+  typeof window.__model.meta.maxEle === "number"
+    ? window.__model.meta.maxEle
+    : null;
+
+    let maxEle = -Infinity;
+    for (let i = 0; i < elevPoints.length; i++) {
+      const e = elevPoints[i].ele;
+      if (typeof e === "number" && e > maxEle) {
+        maxEle = e;
+      }
+    }
+
+   const finalMaxEle = metaMaxEle != null ? metaMaxEle : maxEle;
+
+altEl.textContent =
+  `${Math.round(startEle)} m / ${Math.round(finalMaxEle)} m`;
+
+  }
+
+  // ===== 4️⃣ 绘制剖面图（进度为 0）=====
+  currentProgressKm = 0;
+  cursorDist = 0;
+  drawElevationProfile(0);
+}
+
+
+/* ============================================================
+ * ③ JSON.nodes → 渲染节点（抽屉列表 / 地图标记 / 天气条）
+ * ============================================================ */
+function renderNodesFromJson(model) {
+    console.log("🚨 renderNodesFromJson CALLED");
+  console.log("📦 model =", model);
+  if (!model || !Array.isArray(model.nodes)) {
+    console.warn("JSON 中没有 nodes 字段");
+    return;
+  }
+
+const nodes = model.nodes;
+// ⚠️ 只保留人工节点，其它节点一律不参与地图渲染
+
+
+// ==============================
+// 🌤 提取天气节点（唯一数据源）
+// ==============================
+// ===== 提取天气节点（优先 weatherNodes，其次 nodes） =====
+let weatherNodes = [];
+
+// ① 新结构：直接来自 JSON 顶层 weatherNodes
+if (Array.isArray(model.weatherNodes) && model.weatherNodes.length > 0) {
+  weatherNodes = model.weatherNodes.map(w => ({
+    ...w,
+    positionKm: Number(w.km ?? w.positionKm ?? 0),
+    nodeType: "weather"
+  }));
+  console.log("🌤 使用 model.weatherNodes，共", weatherNodes.length);
+}
+
+// ② 旧结构兜底：nodes 里找 nodeType=weather
+else if (Array.isArray(model.nodes)) {
+  weatherNodes = model.nodes.filter(n => n.nodeType === "weather");
+  console.log("🌤 使用 model.nodes.weather，共", weatherNodes.length);
+}
+
+// 写入全局，供 C1 / 天气条 / 剖面共用
+window.__WEATHER_NODES = weatherNodes;
+
+
+// ✅ 初始化：默认显示“起点天气节点”（不在轨迹附近/无光标时回退用 0 km）
+try{ if (typeof updateWeatherByKm==="function") updateWeatherByKm(0); }catch(e){}
+// 🔍 验证日志（第一步只看这个）
+console.log("🌤 FINAL WEATHER NODES =", weatherNodes);
+
+
+
+  
+  // ----- 抽屉列表（稳定版：仅用场景节点，不含 weather） -----
+  const drawer = document.getElementById("dynamicDrawerContent");
+
+  function __swEscapeHtml(s){
+    return String(s ?? "")
+      .replace(/&/g,"&amp;")
+      .replace(/</g,"&lt;")
+      .replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;")
+      .replace(/'/g,"&#39;");
+  }
+
+  if (drawer){
+  drawer.innerHTML = ""; // 清空旧内容
+
+  const nodesForDrawer = Array.isArray(model.nodes)
+    ? model.nodes.filter(n => {
+        const t = String(n.nodeType || n.type || "").toLowerCase();
+        return t !== "weather";
+      })
+    : [];
+
+  nodesForDrawer.sort((a,b)=>{
+    const ka = Number(a.startKm ?? a.positionKm ?? 0);
+    const kb = Number(b.startKm ?? b.positionKm ?? 0);
+    return ka - kb;
+  });
+
+  if (nodesForDrawer.length === 0){
+    drawer.innerHTML = '<div style="text-align:center; color:rgba(255,255,255,0.45); padding:36px 10px; font-size:13px;">暂无场景节点</div>';
+  }else{
+    // 生成老版 scene-flow 结构（仅负责 UI，数据仍来自新引擎）
+    let html = '<div class="scene-flow"><div class="scene-flow-table">';
+
+    // 用长度做一个“右侧条”占比（没有长度就给固定最小值）
+    let maxLenM = 0;
+    nodesForDrawer.forEach(n=>{
+      const raw = n && n.raw ? n.raw : null;
+      const lenM = raw && raw.lengthM != null ? Number(raw.lengthM) : 0;
+      if (Number.isFinite(lenM)) maxLenM = Math.max(maxLenM, lenM);
+    });
+    if (!maxLenM || !Number.isFinite(maxLenM)) maxLenM = 1;
+
+    nodesForDrawer.forEach((n, idx)=>{
+      const raw = n && n.raw ? n.raw : {};
+      const km = Number(n.startKm ?? n.positionKm ?? 0);
+      const kmTxt = (Number.isFinite(km) ? km.toFixed(1) : "--") + "km";
+
+      const title = (n.shortName || "(未命名)").trim();
+      const desc  = (n.desc || "").trim();
+
+      const lenM = raw.lengthM != null ? Number(raw.lengthM) : 0;
+
+      let metricRight = "";
+      if (Number.isFinite(lenM) && lenM > 0){
+        metricRight = (lenM >= 1000 ? (lenM/1000).toFixed(1) + "km" : Math.round(lenM) + "m");
+      }
+
+      const pct = (Number.isFinite(lenM) && lenM > 0) ? Math.max(8, Math.min(100, (lenM/maxLenM)*100)) : 12;
+
+      html += `
+        <div class="scene-flow-row" data-idx="${idx}">
+          <div class="scene-flow-cell scene-flow-cell-distance">
+            <span class="scene-flow-distance scene-flow-distance-green">${__swEscapeHtml(kmTxt)}</span>
+          </div>
+
+          <div class="scene-flow-cell scene-flow-cell-main">
+            <div class="scene-flow-title">${__swEscapeHtml(title)}</div>
+            <div class="scene-flow-sub">${__swEscapeHtml(desc)}</div>
+          </div>
+
+          <div class="scene-flow-cell scene-flow-cell-bar">
+            <div class="scene-flow-bar-bg">
+              <div class="scene-flow-bar-fill" style="width:${pct}%"></div>
+            </div>
+            <div class="scene-flow-bar-label">${__swEscapeHtml(metricRight)}</div>
+          </div>
+        </div>
+      `;
+    });
+
+    html += '</div></div>';
+    drawer.innerHTML = html;
+  }
+}
+// ----- 地图节点 -----
+// （已废弃：地图 POI 节点统一由 renderSceneNodesFromModel() 使用 .poi-label 渲染，避免重复）
+
+// ----- 天气条 -----
+  const weatherStrip = document.getElementById("weatherStrip");
+  if (weatherStrip && Array.isArray(model.profile) && model.profile.length > 0) {
+    weatherStrip.innerHTML = "";
+    const weatherNodesForStrip = Array.isArray(window.__WEATHER_NODES) ? window.__WEATHER_NODES : [];
+
+    const totalKm = model.profile[model.profile.length - 1].km;
+
+    weatherNodesForStrip.forEach(w => {
+      const div = document.createElement("div");
+      div.className = "weather-node";
+      div.style.left = `${(w.positionKm / totalKm) * 100}%`;
+      div.innerHTML = w.shortName || "";
+      weatherStrip.appendChild(div);
+    });
+  }
+}
+
+
+/* ============================================================
+ * ④ JSON.track → 渲染路线 polyline（地图主轨迹）
+ * ============================================================ */
+/* ============================================================
+ * ④ JSON.track → 渲染路线 polyline（地图主轨迹）
+ *    修复：track 不存在时，回退用 profile 画线
+ *    同时：写回老系统依赖的 routeLatLngs（并挂到 window 方便你在 Console 看）
+ * ============================================================ */
+function renderTrackFromJson(model) {
+  // 1) 轨迹点来源：优先 track，其次 profile
+  const src = (model && Array.isArray(model.track) && model.track.length >= 2)
+    ? model.track
+    : (model && Array.isArray(model.profile) && model.profile.length >= 2)
+      ? model.profile
+      : null;
+
+  if (!src) {
+    console.warn("renderTrackFromJson：track/profile 都无效，无法绘制路线");
+    return;
+  }
+
+  // 2) 标准化成 Leaflet 需要的 [lat, lon]
+  const latlngs = src
+    .map(p => [Number(p.lat), Number(p.lon)])
+    .filter(a => !isNaN(a[0]) && !isNaN(a[1]));
+
+  if (latlngs.length < 2) {
+    console.warn("renderTrackFromJson：坐标无效，点数不足");
+    return;
+  }
+
+  // 3) ⭐老系统唯一信任的数据源：routeLatLngs（注意：这是 IIFE 里的那个变量）
+  routeLatLngs = latlngs.slice();
+  window.routeLatLngs = routeLatLngs; // 方便你在 Console 里直接 window.routeLatLngs 看
+  console.log("✅ routeLatLngs 写入成功，点数 =", routeLatLngs.length);
+  // ===== FORCE LOAD scene_state.js =====
+(function forceLoadSceneState() {
+  if (window.SceneState) {
+    console.log("[force-load] SceneState already exists");
+    return;
+  }
+
+  const s = document.createElement("script");
+  s.src = "./scene_state.js";
+  s.async = false;
+
+  s.onload = () => {
+    console.log("[force-load] scene_state.js loaded OK", window.SceneState);
+  };
+
+  s.onerror = () => {
+    console.error("[force-load] FAILED to load scene_state.js");
+  };
+
+  document.head.appendChild(s);
+})();
+
+
+  // 4) 画线
+  if (window.jsonRouteLine) map.removeLayer(window.jsonRouteLine);
+
+  window.jsonRouteLine = L.polyline(latlngs, {
+    color: "#ff3333",
+    weight: 4
+  }).addTo(map);
+
+  // 5) 视野适配
+  map.fitBounds(window.jsonRouteLine.getBounds().pad(0.15));
+  console.log("✅ JSON 路线渲染完成，点数 =", latlngs.length);
+  resetRouteProgressState();
+}
+
+
+// =====================================================
+// GPS → 路线进度 → 左上角卡片（唯一出口）
+// =====================================================
+function updateStatsCardByGps(lat, lng){
+  if (!window.routeLatLngs || !Array.isArray(elevPoints) || elevPoints.length === 0){
+    console.warn("⛔ 路线或 profile 尚未就绪");
+    return;
+  }
+
+  const totalKm = elevTotalDist || 0;
+  const distEl = document.getElementById("statDistance");
+  const altEl  = document.getElementById("statAlt");
+
+  let minDist = Infinity;
+  let bestIdx = -1;
+
+  for (let i = 0; i < routeLatLngs.length; i++){
+    const [rlat, rlng] = routeLatLngs[i];
+    const d = distanceKm(lat, lng, rlat, rlng) * 1000;
+    if (d < minDist){
+      minDist = d;
+      bestIdx = i;
+    }
+  }
+
+  if (!isOnRoute){
+    if (minDist > 100){
+      distEl.textContent = `-- / ${totalKm.toFixed(1)} km`;
+      return;
+    }
+    isOnRoute = true;
+    routeStartIndex = bestIdx;
+    routeStartKm = elevPoints[bestIdx]?.dist || 0;
+    console.log("✅ 已进入徒步起点 index =", bestIdx);
+  }
+
+  const curKm = elevPoints[bestIdx]?.dist || 0;
+  let doneKm = curKm - routeStartKm;
+
+  if (minDist > 100){
+    doneKm = - (minDist / 1000);
+  }
+
+  distEl.textContent =
+    `${doneKm.toFixed(1)} km / ${totalKm.toFixed(1)} km`;
+
+  const curEle = elevPoints[bestIdx]?.ele ?? "--";
+  const maxEle = Math.max(...elevPoints.map(p => p.ele || 0));
+
+  altEl.textContent =
+    `${Math.round(curEle)} m / ${Math.round(maxEle)} m`;
+
+  currentProgressKm = Math.max(0, doneKm);
+  if (typeof updateCursorByDist === "function"){
+    if (window.setProgressKm){ setProgressKm(currentProgressKm, "gps"); } else { updateCursorByDist(currentProgressKm); }
+  }
+}
+
+
+
+
+    function distanceKm(aLat, aLng, bLat, bLng){
+      const R = 6371;
+      const dLat = (bLat - aLat) * Math.PI / 180;
+      const dLng = (bLng - aLng) * Math.PI / 180;
+      const la1  = aLat * Math.PI / 180;
+      const la2  = bLat * Math.PI / 180;
+      const sinDLat = Math.sin(dLat / 2);
+      const sinDLng = Math.sin(dLng / 2);
+      const c = 2 * Math.asin(
+        Math.sqrt(
+          sinDLat * sinDLat +
+          Math.cos(la1) * Math.cos(la2) * sinDLng * sinDLng
+        )
+      );
+      return R * c;
+    }
+
+    const elevCanvas = document.getElementById("elevCanvas");
+    const elevCtx    = elevCanvas ? elevCanvas.getContext("2d") : null;
+    const elevPanel  = document.getElementById("elevPanel");
+    const elevTooltip= document.getElementById("elevTooltip");
+    if (elevTooltip){
+      elevTooltip.style.left = "12px";
+      elevTooltip.style.top  = "12px";
+    }
+
+  function drawElevationProfile(progressKm){
+  if (!elevCanvas || !elevCtx || !elevPoints.length) return;
+
+  const w = elevCanvas.clientWidth || 320;
+  const h = elevCanvas.clientHeight || 120;
+  elevCanvas.width  = w;
+  elevCanvas.height = h;
+
+  elevCtx.clearRect(0, 0, w, h);
+
+  const total  = elevTotalDist || elevPoints[elevPoints.length - 1].dist || 0.001;
+  const maxEle = Math.max(...elevPoints.map(p => p.ele));
+  const minEle = Math.min(...elevPoints.map(p => p.ele));
+
+  const paddingBottom = 45;
+  const paddingTop    = 8;
+  const usableHeight  = h - paddingTop - paddingBottom;
+  const baseY         = h - paddingBottom;
+
+  if (typeof progressKm === "number") {
+    currentProgressKm = Math.max(0, Math.min(progressKm, total));
+  }
+  const safeProgress = currentProgressKm;
+
+  function project(p){
+    const x = (p.dist / total) * w;
+    const y = baseY - ((p.ele - minEle) / (maxEle - minEle || 1)) * usableHeight;
+    return { x, y };
+  }
+
+  /* ===== 已完成区域填充 ===== */
+  if (safeProgress > 0){
+    elevCtx.beginPath();
+    elevCtx.moveTo(0, baseY);
+
+    for (let i = 0; i < elevPoints.length; i++){
+      const p = elevPoints[i];
+      if (p.dist > safeProgress){
+        const prev = elevPoints[i - 1] || p;
+        const r = (safeProgress - prev.dist) / (p.dist - prev.dist || 1);
+        const ele = prev.ele + r * (p.ele - prev.ele);
+        const proj = project({ dist: safeProgress, ele });
+        elevCtx.lineTo(proj.x, proj.y);
+        break;
+      } else {
+        const proj = project(p);
+        elevCtx.lineTo(proj.x, proj.y);
+      }
+    }
+
+    elevCtx.lineTo((safeProgress / total) * w, baseY);
+    elevCtx.closePath();
+    elevCtx.fillStyle = "rgba(160,130,70,0.9)";
+    elevCtx.fill();
+  }
+
+  /* ===== 主剖面线 ===== */
+  elevCtx.beginPath();
+  elevPoints.forEach((p, i) => {
+    const proj = project(p);
+    i === 0 ? elevCtx.moveTo(proj.x, proj.y) : elevCtx.lineTo(proj.x, proj.y);
+  });
+  elevCtx.strokeStyle = "#ffffff";
+  elevCtx.lineWidth = 2;
+  elevCtx.stroke();
+
+  /* ===== 基线 ===== */
+  elevCtx.beginPath();
+  elevCtx.moveTo(0, baseY + 0.5);
+  elevCtx.lineTo(w, baseY + 0.5);
+  elevCtx.strokeStyle = "rgba(255,255,255,0.35)";
+  elevCtx.lineWidth = 1;
+  elevCtx.stroke();
+
+  /* ===== 竖线 + 小球 ===== */
+  if (cursorDist != null) {
+    const dist = Math.max(0, Math.min(cursorDist, total));
+
+    let nearest = elevPoints[0];
+    let minDiff = Math.abs(dist - nearest.dist);
+    for (let i = 1; i < elevPoints.length; i++){
+      const d = Math.abs(dist - elevPoints[i].dist);
+      if (d < minDiff){
+        minDiff = d;
+        nearest = elevPoints[i];
+      }
+    }
+
+    const projPoint = project(nearest);
+
+  // ★ 是否正好命中天气节点（以 profile 点为准）
+// ★ 是否正好命中天气节点（统一到“绝对 km”坐标系）
+let wxHit = false;
+const absKm = (typeof routeStartKm === "number")
+  ? routeStartKm + nearest.dist
+  : nearest.dist;
+
+if (Array.isArray(window.__WEATHER_NODES)) {
+  for (const n of window.__WEATHER_NODES) {
+    const km = Number(n.km ?? n.positionKm);
+    if (
+      Number.isFinite(km) &&
+      Math.abs(km - absKm) < 0.05   // 50 米容差
+    ) {
+      wxHit = true;
+      break;
+    }
+  }
+}
+
+
+
+    /* —— 竖线 —— */
+    elevCtx.beginPath();
+    elevCtx.moveTo(projPoint.x, baseY);
+    elevCtx.lineTo(projPoint.x, projPoint.y);
+    elevCtx.strokeStyle = wxHit
+      ? "rgba(255,180,0,0.95)"
+      : "rgba(255,255,255,0.85)";
+    elevCtx.lineWidth = wxHit ? 4 : 1.5;
+    elevCtx.stroke();
+
+    /* —— 小球 —— */
+    elevCtx.beginPath();
+    elevCtx.arc(projPoint.x, projPoint.y, wxHit ? 5 : 4, 0, Math.PI * 2);
+    elevCtx.fillStyle = wxHit
+      ? "rgba(255,180,0,0.98)"
+      : "#ffffff";
+    elevCtx.fill();
+  }
+}
+
+
+
+// ================================
+// 左上角：天气（随当前位置 km 变化）
+// 依赖：window.__WEATHER_NODES（
+// ==============================
+// 左上角天气：统一简写出口（禁止直接写 DOM）
+// ==============================
+
+
+// ✅ 全局唯一：按 km 命中天气节点 + 更新UI
+function updateWeatherByKm(currentKm) {
+  const nodes = window.__WEATHER_NODES;
+  const weatherEl = document.getElementById("statWeather");      // 左上角卡片天气
+  const strip = document.getElementById("weatherStrip");         // 底部天气节点条（如存在）
+  const elevWxEl = document.getElementById("elevWeatherText");   // 剖面图底部天气栏
+
+  // 没有任何节点：清空
+  if (!Array.isArray(nodes) || nodes.length === 0) {
+    if (weatherEl) weatherEl.textContent = "--";
+    if (elevWxEl) elevWxEl.textContent = "--";
+    if (strip) strip.querySelectorAll(".weather-node").forEach(el => el.classList.remove("active"));
+    window.__WX_HIT_INDEX = 0;
+    window.__CURSOR_AT_WX_NODE = false;
+    return;
+  }
+
+  // 规则：不在轨迹附近 / 无有效 km → 回退到起点（0 km）
+  const k = Number(currentKm);
+  const kmNow = Number.isFinite(k) ? k : 0;
+
+  // 命中规则：取最后一个 positionKm <= kmNow（你之前已验证可用）
+  let hitIndex = 0;
+  for (let i = 0; i < nodes.length; i++) {
+    const p = Number(nodes[i]?.positionKm ?? nodes[i]?.km ?? nodes[i]?.distKm ?? 0);
+    if (Number.isFinite(p) && p <= kmNow) hitIndex = i;
+  }
+  const hit = nodes[hitIndex] || nodes[0] || {};
+
+  // --- 取值：shortName（带温度区间）---
+  const shortName = String(
+    hit.shortName ?? hit.short ?? hit.brief ?? hit.weatherBrief ?? hit.weather ?? hit.name ?? "--"
+  ).trim() || "--";
+
+  // --- 风 / UV / 体感（只给剖面栏用）---
+  const windVal = (hit.wind ?? hit.windSpeed ?? hit.wind_ms ?? hit.windMps);
+  const wind = (windVal != null && String(windVal).trim() !== "") ? String(windVal).trim() : "";
+
+  const uvVal = (hit.uv ?? hit.uvIndex ?? hit.uv_i);
+  const uv = (uvVal != null && Number.isFinite(Number(uvVal)))
+    ? String(Number(uvVal).toFixed(1)).replace(/\.0$/, "")
+    : "";
+
+  const feelsVal = (hit.feelsLike ?? hit.apparentT ?? hit.apparentTemp ?? hit.feels ?? hit.feelsC);
+  let feels = "";
+  if (feelsVal != null && String(feelsVal).trim() !== "") {
+    // 允许 JSON 直接给 "18°C" 或 18
+    const s = String(feelsVal).trim();
+    feels = /°/.test(s) ? s : `${s}°C`;
+  }
+
+  // ==============================
+  // 1) 左上角卡片：只显示 shortName
+  // ==============================
+  if (weatherEl) weatherEl.textContent = shortName;
+
+ // ==============================
+// 2) 剖面底部天气栏：shortName｜风｜UV｜体感｜降水
+// ==============================
+if (elevWxEl) {
+  const parts = [];
+
+  // 1️⃣ 简称（阴｜12–26℃）
+  parts.push(shortName);
+
+  // 2️⃣ 风速（允许数字 0 / 10）
+  if (wind !== undefined && wind !== null && String(wind).trim() !== "") {
+    parts.push(`🌬 ${wind}m/s`);
+  }
+
+  // 5️⃣ ⭐ 降水概率（pop = 0 也必须显示）
+  if (hit.pop !== undefined && hit.pop !== null) {
+    parts.push(`🌧 ${hit.pop}%`);
+  }
+ // 3️⃣ UV
+  if (uv !== undefined && uv !== null) {
+    parts.push(`UV ${uv}`);
+  }
+  // 4️⃣ ⭐ 体感温度（JSON 字段就是 feel）
+  if (hit.feel !== undefined && hit.feel !== null) {
+    parts.push(`体感 ${hit.feel}°C`);
+  }
+
+
+  elevWxEl.textContent = parts.join("｜");
+}
+
+
+ // ==============================
+// 3) 底部天气节点条：命中时显示黄色竖条
+// ==============================
+if (strip) {
+  const items = strip.querySelectorAll(".weather-node");
+
+  // 1️⃣ 节点 active 状态（保留）
+  items.forEach((el, idx) => {
+    el.classList.toggle("active", idx === hitIndex);
+  });
+
+  // 2️⃣ 设置 CSS 变量：当前命中 index + 总数
+  strip.style.setProperty("--wx-hit-index", hitIndex);
+  strip.style.setProperty("--wx-count", items.length);
+
+  // 3️⃣ 仅在“命中节点”时显示竖条
+  strip.classList.add("wx-hit");
+
+  // 4️⃣ 可选：短延时后淡出（不常驻）
+  clearTimeout(strip.__wxHideTimer);
+  strip.__wxHideTimer = setTimeout(() => {
+    strip.classList.remove("wx-hit");
+  }, 300); // 300ms，足够明显但不干扰
+}
+
+
+  window.__WX_HIT_INDEX = hitIndex;
+
+// ✅ 只在“非常接近节点km”时，才认为命中（用于竖线/小球高亮）
+const hitKm = Number(hit?.positionKm ?? hit?.km ?? hit?.distKm ?? 0);
+const nearThresholdKm = 0.06; // 60米左右，你可改成 0.03/0.1
+window.__CURSOR_AT_WX_NODE =
+  Number.isFinite(hitKm) && Math.abs(kmNow - hitKm) <= nearThresholdKm;
+
+}
+
+// ✅ 兼容旧调用：所有地方继续 call updateStatWeatherByKm
+function updateStatWeatherByKm(km) {
+  updateWeatherByKm(km);
+}
+
+
+function updateCursorByDist(distKm){
+      if (!elevPoints.length || !elevCanvas) return;
+
+      const total = elevTotalDist || elevPoints[elevPoints.length - 1].dist || 0.001;
+      cursorDist = Math.max(0, Math.min(distKm, total));
+
+      // ✅ 剖面竖线变化时：同步更新天气（左上角 + 剖面底部天气栏）
+      if (typeof updateStatWeatherByKm === "function") {
+        updateStatWeatherByKm(cursorDist);
+      }
+
+      let nearestIdx = 0;
+      let minDiff    = Math.abs(cursorDist - elevPoints[0].dist);
+      for (let i = 1; i < elevPoints.length; i++){
+        const d = Math.abs(cursorDist - elevPoints[i].dist);
+        if (d < minDiff){
+          minDiff = d;
+          nearestIdx = i;
+        }
+      }
+
+      const p   = elevPoints[nearestIdx];
+      const ele = p.ele;
+
+      let slopePct = 0;
+      if (nearestIdx > 0 && nearestIdx < elevPoints.length - 1){
+        const p1 = elevPoints[nearestIdx - 1];
+        const p2 = elevPoints[nearestIdx + 1];
+        const rise  = p2.ele - p1.ele;
+        const runKm = (p2.dist - p1.dist) || 0.000001;
+        const runM  = runKm * 1000;
+        slopePct = runM > 0 ? (rise / runM) * 100 : 0;
+      }
+
+      cursorInfo = {
+        dist:  cursorDist,
+        ele:   ele,
+        slope: slopePct
+      };
+
+      // 同步左上角天气（随当前位置变化）
+      updateStatWeatherByKm(cursorDist);
+
+      if (elevPanel && elevTooltip){
+        const rectCanvas = elevCanvas.getBoundingClientRect();
+        const rectPanel  = elevPanel.getBoundingClientRect();
+        const ratio      = cursorDist / total;
+        const xInCanvas  = ratio * rectCanvas.width;
+        const xInPanel   = rectCanvas.left - rectPanel.left + xInCanvas;
+
+        elevTooltip.style.display = "block";
+        //elevTooltip.style.left    = xInPanel + "px";
+        //elevTooltip.style.top     = (rectCanvas.top - rectPanel.top + 36) + "px";
+
+        const dLabel = cursorDist.toFixed(1).replace(/\.0$/, "");
+        const hLabel = Math.round(ele);
+        const sLabel = Math.round(slopePct);
+
+        elevTooltip.innerHTML =
+          `<span class="elev-tooltip-label">里程</span> ` +
+          `<span class="elev-tooltip-value">${dLabel} km</span><br>` +
+          `<span class="elev-tooltip-label">海拔</span> ` +
+          `<span class="elev-tooltip-value">${hLabel} m</span><br>` +
+          `<span class="elev-tooltip-label">坡度</span> ` +
+          `<span class="elev-tooltip-value">${sLabel}%</span>`;
+      }
+
+      drawElevationProfile(currentProgressKm);
+    }
+
+    function handleElevPointer(clientX){
+      if (!elevCanvas || !elevPoints.length) return;
+
+      const rect  = elevCanvas.getBoundingClientRect();
+      const total = elevTotalDist || elevPoints[elevPoints.length - 1].dist || 0.001;
+
+      let x = clientX - rect.left;
+      x = Math.max(0, Math.min(x, rect.width));
+
+      const ratio  = x / rect.width;
+      const distKm = ratio * total;
+
+      updateCursorByDist(distKm);
+    }
+
+    function initRouteFromGpx(){
+      const gpxPath = cfgHome.gpxFile || "assets/track/tongariro.gpx";
+
+      fetch(gpxPath)
+        .then(res => res.ok ? res.text() : "")
+        .then(text => {
+          if (!text) return;
+
+          const xml = new DOMParser().parseFromString(text, "application/xml");
+          const pts = Array.from(xml.getElementsByTagName("trkpt"));
+          if (!pts.length) return;
+
+          const latlngs = [];
+          elevPoints    = [];
+          window.elevPoints = elevPoints;
+          elevTotalDist = 0;
+          window.elevTotalDist = elevTotalDist;
+
+          let prevLat = null;
+          let prevLng = null;
+
+          pts.forEach(function(pt){
+            const lat = parseFloat(pt.getAttribute("lat"));
+            const lng = parseFloat(pt.getAttribute("lon"));
+            const eleNode = pt.getElementsByTagName("ele")[0];
+            const ele = eleNode ? parseFloat(eleNode.textContent) : 0;
+
+            latlngs.push([lat, lng]);
+
+            if (prevLat !== null && prevLng !== null){
+              elevTotalDist += distanceKm(prevLat, prevLng, lat, lng);
+            }
+            elevPoints.push({
+              dist: elevTotalDist,
+              ele:  ele
+            });
+
+            prevLat = lat;
+            prevLng = lng;
+          });
+
+          const line = L.polyline(latlngs, { color:"#ef4444", weight:4 }).addTo(map);
+          routeBounds = line.getBounds();
+          if (routeBounds) map.fitBounds(routeBounds.pad(0.15));
+
+          routeLatLngs = latlngs.slice();
+
+          let doneKm = 0;
+
+// 🚫 不再从 UI 反推进度（UI 已经不可信）
+currentProgressKm = doneKm;
+cursorDist        = doneKm;
+
+drawElevationProfile(doneKm);
+
+        })
+        .catch(()=>{});
+    }
+
+    const btnNorth       = document.getElementById("btnNorth");
+    const btnLayerToggle = document.getElementById("btnLayerToggle");
+    const btnCache       = document.getElementById("btnCache");
+    const btnPlay        = document.getElementById("btnPlay");
+    const btnLocateRoute = document.getElementById("btnLocateRoute");
+    const btnNodeToggle  = document.getElementById("btnNodeToggle");
+    const cacheStatus    = document.getElementById("cacheStatus");
+
+    /* 剖面标签拖动（顶部左右拖） */
+    let tooltipDragActive = false;
+    let tooltipStartX = 0;
+    let tooltipBaseLeft = 0;
+
+    function tooltipDragStart(clientX){
+      if (!elevTooltip || !elevPanel) return;
+      const panelRect = elevPanel.getBoundingClientRect();
+      const tipRect   = elevTooltip.getBoundingClientRect();
+      tooltipDragActive = true;
+      tooltipStartX     = clientX;
+      tooltipBaseLeft   = tipRect.left - panelRect.left;
+    }
+    function tooltipDragMove(clientX){
+      if (!tooltipDragActive || !elevTooltip || !elevPanel) return;
+      const panelRect = elevPanel.getBoundingClientRect();
+      const tipRect   = elevTooltip.getBoundingClientRect();
+      let left = tooltipBaseLeft + (clientX - tooltipStartX);
+      const padding = 8;
+      const maxLeft = panelRect.width - tipRect.width - padding;
+      if (left < padding) left = padding;
+      if (left > maxLeft) left = maxLeft;
+      elevTooltip.style.left = left + "px";
+      elevTooltip.style.top  = "8px";
+    }
+    function tooltipDragEnd(){
+      tooltipDragActive = false;
+    }
+
+    if (elevTooltip){
+      elevTooltip.addEventListener("mousedown", function(e){
+        e.preventDefault();
+        tooltipDragStart(e.clientX);
+      });
+      window.addEventListener("mousemove", function(e){
+        tooltipDragMove(e.clientX);
+      });
+      window.addEventListener("mouseup", tooltipDragEnd);
+
+      elevTooltip.addEventListener("touchstart", function(e){
+        const t = e.touches[0];
+        tooltipDragStart(t.clientX);
+      }, { passive:true });
+      window.addEventListener("touchmove", function(e){
+        const t = e.touches[0];
+        tooltipDragMove(t.clientX);
+      }, { passive:true });
+      window.addEventListener("touchend", tooltipDragEnd);
+      window.addEventListener("touchcancel", tooltipDragEnd);
+    }
+
+    let elevDragging = false;
+    if (elevCanvas){
+      elevCanvas.addEventListener("mousedown", function(e){
+        elevDragging = true;
+        handleElevPointer(e.clientX);
+      });
+      window.addEventListener("mousemove", function(e){
+        if (elevDragging) handleElevPointer(e.clientX);
+      });
+      window.addEventListener("mouseup", function(){
+        elevDragging = false;
+      });
+
+      elevCanvas.addEventListener("touchstart", function(e){
+        elevDragging = true;
+        handleElevPointer(e.touches[0].clientX);
+      });
+      window.addEventListener("touchmove", function(e){
+        if (elevDragging) handleElevPointer(e.touches[0].clientX);
+      }, { passive:true });
+      window.addEventListener("touchend", function(){
+        elevDragging = false;
+      });
+    }
+
+         /* 抽屉开关逻辑 */
+    const drawerPanel       = document.getElementById("sceneDrawerPanel");
+    const sceneDrawerHandle = document.getElementById("sceneDrawerHandle");
+    const sceneDrawerClose  = document.getElementById("sceneDrawerClose");
+    const sceneSpeedDisplay = document.getElementById("sceneSpeedDisplay");
+    const sceneDrawerHeader = document.querySelector(".scene-drawer-header");
+
+    // 抽屉高度模式：small = 1/3，高度；tall = 2/3 高度
+    let drawerHeightMode = "small";
+
+    function setDrawerHeightMode(mode){
+      if (!drawerPanel) return;
+      drawerHeightMode = mode;
+      if (mode === "tall"){
+        drawerPanel.classList.add("drawer-tall");
+      }else{
+        drawerPanel.classList.remove("drawer-tall");
+      }
+    }
+    // 默认 1/3 高度
+    setDrawerHeightMode("small");
+
+    function toggleDrawer(){
+  if (!drawerPanel) return;
+  const isOpen = drawerPanel.classList.contains("open");
+
+  if (isOpen){
+    // 关闭时顺便把高度档位复位成 1/3
+    drawerPanel.classList.remove("open");
+    setDrawerHeightMode("small");
+  }else{
+    // 每次打开前，先确保是 1/3 高度
+    setDrawerHeightMode("small");
+    drawerPanel.classList.add("open");
+  }
+}
+
+    if (sceneDrawerHandle){
+      sceneDrawerHandle.addEventListener("click", toggleDrawer);
+    }
+    if (sceneDrawerClose){
+      sceneDrawerClose.addEventListener("click", toggleDrawer);
+    }
+
+    // 在抽屉头部上/下滑手势：1/3 ↔ 2/3 高度
+    let drawerDragActive = false;
+    let drawerDragStartY = 0;
+
+    function drawerDragStart(y){
+      drawerDragActive = true;
+      drawerDragStartY = y;
+    }
+    function drawerDragMove(y){
+      if (!drawerDragActive) return;
+      const delta = y - drawerDragStartY;
+
+      // 向上滑，拉高到 2/3
+      if (drawerHeightMode === "small" && delta < -30){
+        setDrawerHeightMode("tall");
+        drawerDragActive = false;
+      }
+      // 向下滑，降回 1/3
+      else if (drawerHeightMode === "tall" && delta > 30){
+        setDrawerHeightMode("small");
+        drawerDragActive = false;
+      }
+    }
+    function drawerDragEnd(){
+      drawerDragActive = false;
+    }
+
+    if (sceneDrawerHeader){
+      // 鼠标（调试用）
+      sceneDrawerHeader.addEventListener("mousedown", function(e){
+        e.preventDefault();
+        drawerDragStart(e.clientY);
+      });
+      window.addEventListener("mousemove", function(e){
+        drawerDragMove(e.clientY);
+      });
+      window.addEventListener("mouseup", drawerDragEnd);
+
+      // 触摸（手机实际操作）
+      sceneDrawerHeader.addEventListener("touchstart", function(e){
+        const t = e.touches[0];
+        drawerDragStart(t.clientY);
+      }, { passive:true });
+      window.addEventListener("touchmove", function(e){
+        if (!e.touches || !e.touches[0]) return;
+        drawerDragMove(e.touches[0].clientY);
+      }, { passive:true });
+      window.addEventListener("touchend", drawerDragEnd);
+      window.addEventListener("touchcancel", drawerDragEnd);
+    }
+
+    // 点击“当前行进速度” 切换 30'/km ↔ 2km/h（根据 data-pace-min-per-km 自动换算）
+    if (sceneSpeedDisplay){
+      sceneSpeedDisplay.addEventListener("click", function(){
+        // 读取配速（分钟 / 公里）
+    const paceMinPerKm = window.UI_STATE.paceMinPerKm;
+if (!paceMinPerKm || paceMinPerKm <= 0) return;
+
+        if (!paceMinPerKm || paceMinPerKm <= 0) return;
+
+        const mode = sceneSpeedDisplay.getAttribute("data-mode") || "pace";
+
+        if (mode === "pace"){
+          // 切换成 km/h：时速 = 60 / 每公里分钟数
+          const kmh = 60 / paceMinPerKm;
+          const kmhStr = (Math.round(kmh * 10) / 10).toFixed(1);  // 1 位小数
+          sceneSpeedDisplay.textContent = "当前行进速度：" + kmhStr + " km/h";
+          sceneSpeedDisplay.setAttribute("data-mode", "speed");
+        }else{
+          // 切回 30'/km 这种配速显示
+                    // 配速显示：<60 分钟用 30′/km；>=60 分钟用 1.5h/km
+          if (paceMinPerKm < 60){
+            sceneSpeedDisplay.textContent = "当前行进配速：" + Math.round(paceMinPerKm) + "′/km";
+          }else{
+            const hpk = (Math.round((paceMinPerKm/60)*10)/10);
+            sceneSpeedDisplay.textContent = "当前行进配速：" + hpk + " h/km";
+          }
+          sceneSpeedDisplay.setAttribute("data-mode", "pace");
+        }
+      });
+    }
+
+    function setDrawerHandleSceneActive(active){
+      if (!sceneDrawerHandle) return;
+      if (active){
+        sceneDrawerHandle.classList.add("scene-drawer-handle--active");
+      }else{
+        sceneDrawerHandle.classList.remove("scene-drawer-handle--active");
+      }
+    }
+
+
+    function showStatus(msg){
+      if (!cacheStatus) return;
+      cacheStatus.textContent = msg;
+      cacheStatus.style.display = "block";
+      setTimeout(function(){
+        cacheStatus.style.display = "none";
+      }, 2500);
+    }
+
+    if (btnNorth){
+      btnNorth.addEventListener("click", function(){
+        btnNorth.classList.toggle("active");
+        if (routeBounds) map.fitBounds(routeBounds.pad(0.15));
+      });
+    }
+
+    if (btnLayerToggle){
+      btnLayerToggle.addEventListener("click", function(){
+        btnLayerToggle.classList.toggle("active");
+        if (currentLayer === "outdoor"){
+          map.removeLayer(outdoorLayer);
+          map.addLayer(satLayer);
+          currentLayer = "sat";
+        }else{
+          map.removeLayer(satLayer);
+          map.addLayer(outdoorLayer);
+          currentLayer = "outdoor";
+        }
+      });
+    }
+
+    if (btnCache){
+      btnCache.addEventListener("click", function(){
+        showStatus("当前版本只支持在线地图，缓存功能先放一放。");
+      });
+    }
+
+    if (btnLocateRoute){
+      btnLocateRoute.addEventListener("click", function(){
+        if (!navigator.geolocation){
+          showStatus("当前设备不支持定位功能");
+          return;
+        }
+        showStatus("正在获取当前位置…");
+
+        navigator.geolocation.getCurrentPosition(
+          function(pos){
+            var lat = pos.coords.latitude;
+            var lng = pos.coords.longitude;
+            updateStatsCardByGps(lat, lng, pos.timestamp);
+
+            var latlng = [lat, lng];
+
+            if (!userMarker){
+              userMarker = L.circleMarker(latlng, {
+                radius:6,
+                color:"#2563eb",
+                weight:3,
+                fillColor:"#3b82f6",
+                fillOpacity:0.85
+              }).addTo(map);
+            } else {
+              userMarker.setLatLng(latlng);
+            }
+
+            var targetZoom = Math.max(map.getZoom(), 15);
+            map.setView(latlng, targetZoom);
+
+            showStatus("已定位到当前位置");
+
+// ✅ 开始持续 GPS 跟踪（用于实时速度/配速/时间）
+// 只在第一次点击“定位”时启动一次，避免重复 watch
+if (!window.__GPS_WATCH_ID && navigator.geolocation && navigator.geolocation.watchPosition){
+  window.__GPS_WATCH_ID = navigator.geolocation.watchPosition(
+    function(p){
+      const lat2 = p.coords.latitude;
+      const lng2 = p.coords.longitude;
+      updateStatsCardByGps(lat2, lng2, p.timestamp);
+
+      const latlng2 = [lat2, lng2];
+      if (userMarker) userMarker.setLatLng(latlng2);
+    },
+    function(e){
+      // 不弹窗，只在状态栏提示
+      console.warn("watchPosition error", e);
+    },
+    { enableHighAccuracy:true, maximumAge:1000, timeout:10000 }
+  );
+}
+          },
+          function(err){
+            var msg = "定位失败";
+            if (err.code === 1)      msg = "定位被拒绝，请在浏览器中允许访问位置";
+            else if (err.code === 2) msg = "无法获取当前位置（信号不佳）";
+            else if (err.code === 3) msg = "定位超时，请稍后再试";
+            showStatus(msg);
+          },
+          {
+            enableHighAccuracy:true,
+            timeout:10000,
+            maximumAge:30000
+          }
+        );
+      });
+    }
+
+    document.querySelectorAll(".tab-btn").forEach(function(btn){
+      const href = btn.dataset.href;
+      if (href){
+        btn.addEventListener("click", function(){
+          window.location.href = href;
+        });
+      }
+    });
+
+    /* 视频逻辑 */
+    const videoOverlay     = document.getElementById("videoOverlay");
+    const routeVideo       = document.getElementById("routeVideo");
+    const videoBtnBack     = document.getElementById("videoBtnBack");
+    const videoBtnPlayPause= document.getElementById("videoBtnPlayPause");
+    const iconPlayPause    = document.getElementById("iconPlayPause");
+    const videoBtnForward  = document.getElementById("videoBtnForward");
+    const videoBtnClose    = document.getElementById("videoBtnClose");
+    const videoBtnSpeed    = document.getElementById("videoBtnSpeed");
+    const videoSpeedLabel  = document.getElementById("videoSpeedLabel");
+    const speedList  = [0.5, 0.8, 1.0, 1.2, 1.5];
+    let   speedIndex = 2;
+
+    function updatePlayIcon(){
+      if (!iconPlayPause || !routeVideo) return;
+      if (routeVideo.paused){
+        iconPlayPause.classList.remove("icon-pause");
+        iconPlayPause.classList.add("icon-play");
+      }else{
+        iconPlayPause.classList.remove("icon-play");
+        iconPlayPause.classList.add("icon-pause");
+      }
+    }
+    function setPlaybackRate(rate){
+      if (!routeVideo || !videoSpeedLabel) return;
+      routeVideo.playbackRate = rate;
+      videoSpeedLabel.textContent = rate.toFixed(1);
+    }
+    function cycleSpeed(){
+      speedIndex = (speedIndex + 1) % speedList.length;
+      setPlaybackRate(speedList[speedIndex]);
+    }
+    function openVideoOverlay(){
+      if (!videoOverlay || !routeVideo) return;
+      videoOverlay.classList.add("show");
+      routeVideo.pause();
+      routeVideo.currentTime = 0;
+      routeVideo.load();
+      setPlaybackRate(speedList[speedIndex]);
+      updatePlayIcon();
+      routeVideo.play().catch(function(){
+        updatePlayIcon();
+      });
+    }
+    function closeVideoOverlay(){
+      if (!videoOverlay || !routeVideo) return;
+      routeVideo.pause();
+      videoOverlay.classList.remove("show");
+    }
+
+    if (btnPlay && videoOverlay && routeVideo){
+      btnPlay.addEventListener("click", function(){
+        openVideoOverlay();
+      });
+    }
+    if (videoBtnBack && routeVideo){
+      videoBtnBack.addEventListener("click", function(){
+        routeVideo.currentTime = Math.max(0, routeVideo.currentTime - 10);
+      });
+    }
+    if (videoBtnForward && routeVideo){
+      videoBtnForward.addEventListener("click", function(){
+        routeVideo.currentTime = routeVideo.currentTime + 10;
+      });
+    }
+    if (videoBtnPlayPause && routeVideo){
+      videoBtnPlayPause.addEventListener("click", function(){
+        if (routeVideo.paused){
+          routeVideo.play().catch(function(){});
+        }else{
+          routeVideo.pause();
+        }
+      });
+    }
+    if (videoBtnClose){
+      videoBtnClose.addEventListener("click", function(){
+        closeVideoOverlay();
+      });
+    }
+    if (videoBtnSpeed){
+      videoBtnSpeed.addEventListener("click", function(){
+        cycleSpeed();
+      });
+    }
+    if (routeVideo){
+      routeVideo.addEventListener("click", function(){
+        if (routeVideo.paused){
+          routeVideo.play().catch(function(){});
+        }else{
+          routeVideo.pause();
+        }
+      });
+      routeVideo.addEventListener("play",  updatePlayIcon);
+      routeVideo.addEventListener("pause", updatePlayIcon);
+      routeVideo.addEventListener("ended", updatePlayIcon);
+    }
+
+    /* 剖面图开/关：大卡片打开，小卡片关闭 */
+    const statsCard      = document.getElementById("statsCard");
+    const elevClose      = document.getElementById("elevClose");
+    const elevTooltipEl  = document.getElementById("elevTooltip");
+
+    function openElevPanel(){
+      if (!elevPanel) return;
+      elevPanel.style.display = "block";
+      if (typeof cursorDist === "number") {
+        updateCursorByDist(cursorDist);
+      } else {
+        updateCursorByDist(currentProgressKm || 0);
+      }
+    }
+    function closeElevPanel(){
+      if (!elevPanel) return;
+      elevPanel.style.display = "none";
+      if (elevTooltip){
+        elevTooltip.style.display = "none";
+      }
+    }
+    if (statsCard && elevPanel){
+      statsCard.addEventListener("click", function(){
+        openElevPanel();
+      });
+    }
+    if (elevTooltipEl && elevPanel){
+      elevTooltipEl.addEventListener("click", function(){
+        closeElevPanel();
+      });
+    }
+    if (elevClose && elevPanel){
+      elevClose.addEventListener("click", function(){
+        closeElevPanel();
+      });
+    }
+
+    /* 气泡选中状态清理 */
+    function clearSceneNodeSelection(){
+      sceneNodeMarkers.forEach(function(m){
+        const el = m.getElement();
+        if (!el) return;
+        const label = el.querySelector(".poi-label");
+        if (label){
+          label.classList.remove("poi-label--active");
+        }
+      });
+      setDrawerHandleSceneActive(false);
+    }
+
+    
+  // ============================================================
+  // ✅ 用 JSON 场景节点替换“演示节点气泡”（不影响天气条）
+  // 规则：
+  // - 只渲染 model.nodes 中非 weather 的节点（manual/terrain 等）
+  // - 坐标优先：startLat/startLon → startPt.lat/lon → 按 positionKm/startKm 从 profile/track 找最近点
+  // - 复用原有 poi-label 外观与交互（白底红字、点击高亮、竖线阴影）
+  // - 缩小到低 zoom 时自动隐藏，避免标签外溢
+  // ============================================================
+  function __escapeHtml(s){
+    return String(s ?? "").replace(/[&<>"']/g, ch => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[ch]));
+  }
+
+  function __pickNearestByKmFromModel(model, km){
+    const k = Number(km);
+    if (!Number.isFinite(k)) return null;
+
+    const src =
+      (model && Array.isArray(model.track) && model.track.length) ? model.track :
+      (model && Array.isArray(model.profile) && model.profile.length) ? model.profile :
+      [];
+    if (!src.length) return null;
+
+    let best = null, bestDiff = Infinity;
+    for (let i=0;i<src.length;i++){
+      const p = src[i];
+      const pk = Number(p.km ?? p.dist ?? p.positionKm ?? p.startKm);
+      if (!Number.isFinite(pk)) continue;
+      const d = Math.abs(pk - k);
+      if (d < bestDiff){ bestDiff = d; best = p; }
+    }
+    if (!best) return null;
+    const lat = Number(best.lat), lon = Number(best.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return {lat, lon};
+  }
+
+  function __getSceneNodeLatLng(model, n){
+    // ① startLat/startLon
+    const lat1 = Number(n.startLat), lon1 = Number(n.startLon);
+    if (Number.isFinite(lat1) && Number.isFinite(lon1)) return {lat:lat1, lon:lon1};
+
+    // ② startPt
+    if (n.startPt && Number.isFinite(Number(n.startPt.lat)) && Number.isFinite(Number(n.startPt.lon))){
+      return {lat:Number(n.startPt.lat), lon:Number(n.startPt.lon)};
+    }
+
+    // ③ 按 km 去 profile/track 找最近点
+    const km =
+      (n.positionKm != null) ? n.positionKm :
+      (n.startKm != null) ? n.startKm :
+      (typeof n.kmRange === "string" ? Number(String(n.kmRange).split("-")[0]) : NaN);
+    return __pickNearestByKmFromModel(model, km);
+  }
+
+  function __setActivePoiLabel(marker){
+  try{
+    sceneNodeMarkers.forEach(m=>{
+      const el = m.getElement && m.getElement();
+      if (!el) return;
+      const label = el.querySelector(".poi-label");
+      if (label){
+        label.classList.remove("poi-label--active");
+      }
+    });
+
+    const el = marker.getElement && marker.getElement();
+    if (el){
+      const label = el.querySelector(".poi-label");
+      if (label){
+        label.classList.add("poi-label--active");
+      }
+    }
+  }catch(e){}
+}
+
+
+  function __applyPoiLabelVisibility(){
+    if (!map) return;
+    const z = map.getZoom ? map.getZoom() : 0;
+    const visible = (z >= 14); // ⭐ 低于 14 直接隐藏，避免缩小时“外溢漂移”
+    sceneNodeMarkers.forEach(m=>{
+      const el = m.getElement && m.getElement();
+      if (!el) return;
+      el.style.display = visible ? "" : "none";
+    });
+  }
+
+  function renderSceneNodesFromModel(model){
+    if (!map || !sceneNodeLayer) return;
+
+    // 清空旧节点
+    sceneNodeLayer.clearLayers();
+    sceneNodeMarkers = [];
+
+    const nodes = (model && Array.isArray(model.nodes)) ? model.nodes : [];
+        const sceneNodes = nodes.filter(n => {
+      const t = String(n && (n.nodeType || n.type) || "").toLowerCase();
+      return t === "manual";
+    });
+
+    console.log("✅ JSON 场景节点(非天气) =", sceneNodes.length);
+
+    if (!sceneNodes.length) return;
+
+    sceneNodes.forEach(n=>{
+      const pt = __getSceneNodeLatLng(model, n);
+      if (!pt) return;
+
+      const label = __escapeHtml(n.shortName || n.title || n.name || "(未命名)");
+const html = `
+  <div class="poi-label">
+    <span class="poi-title">${label}</span>
+  </div>
+`;
+
+const icon = L.divIcon({
+  className: "",
+  html,
+  iconSize: null,
+  iconAnchor: [52, 34]
+});
+
+
+
+      const marker = L.marker(
+  [pt.lat, pt.lon],
+  { icon, interactive: true }
+).addTo(sceneNodeLayer);
+
+// 保存原标题（用于还原）
+marker.__baseTitle = __escapeHtml(n.shortName || n.title || n.name || "(未命名)");
+
+sceneNodeMarkers.push(marker);
+
+marker.on("click", () => {
+  const el = marker.getElement && marker.getElement();
+  if (!el) return;
+
+  const titleEl = el.querySelector(".poi-title");
+  if (!titleEl) return;
+
+  const labelEl = el.querySelector(".poi-label");
+  if (!labelEl) return;
+
+  const wasActive = labelEl.classList.contains("poi-label--active");
+
+  // ① 先清掉所有节点的命中态，并还原标题
+  sceneNodeMarkers.forEach(m => {
+    const mel = m.getElement && m.getElement();
+    if (!mel) return;
+
+    const mLabel = mel.querySelector(".poi-label");
+    const mTitle = mel.querySelector(".poi-title");
+
+    if (mLabel) mLabel.classList.remove("poi-label--active");
+    if (mTitle && m.__baseTitle) {
+      mTitle.textContent = m.__baseTitle;
+    }
+  });
+
+  // ② 如果刚才点的是“已命中” → 关闭（什么都不做）
+  if (wasActive) return;
+
+  // ③ 设置当前节点为命中态
+  __setActivePoiLabel(marker);
+
+  // ④ 命中时：在标题后追加简短描述（若有）
+  const desc = String(n.desc || "").trim();
+  if (desc) {
+    const shortDesc =
+      desc.length > 3
+        ? desc.slice(0, 2) + "..."
+        : desc;
+
+    titleEl.textContent = `${marker.__baseTitle}｜${shortDesc}`;
+  }
+});
+
+
+      // 可选：有描述就挂 popup（不影响外观）
+      //const desc = n.desc || n.description || "";
+      //if (desc){
+      //  marker.bindPopup(`<b>${label}</b><br><div>${__escapeHtml(desc)}</div>`);
+      //}
+    });
+
+    // 添加到地图
+    sceneNodeLayer.addTo(map);
+
+    // zoom 控制（只绑一次）
+    if (!window.__POI_ZOOM_VIS_BOUND){
+      window.__POI_ZOOM_VIS_BOUND = true;
+      map.on("zoomend", __applyPoiLabelVisibility);
+    }
+    __applyPoiLabelVisibility();
+    // ================================
+// 地图空白点击：清除节点命中态
+// ================================
+if (!window.__POI_CLEAR_ACTIVE_BOUND){
+  window.__POI_CLEAR_ACTIVE_BOUND = true;
+
+  map.on("click", function(){
+    // 1️⃣ 清 marker 内部 active 状态
+    sceneNodeMarkers.forEach(m=>{
+      m.__isActive = false;
+
+      const el = m.getElement && m.getElement();
+      if (!el) return;
+
+      // 还原标题
+      const titleEl = el.querySelector(".poi-title");
+      if (titleEl && m.__nodeTitle){
+        titleEl.textContent = m.__nodeTitle;
+      }
+
+      // 移除选中态样式
+      const labelEl = el.querySelector(".poi-label");
+      if (labelEl){
+        labelEl.classList.remove("poi-label--active");
+      }
+    });
+
+    // 2️⃣ 清除抽屉红色提醒
+    //__clearDrawerNotice();
+  });
+}
+  }
+
+function buildSceneNodeLayerIfNeeded(){
+      if (!map || !routeLatLngs.length) return;
+      if (sceneNodeLayer) return;
+
+      sceneNodeLayer = L.layerGroup();
+
+      // ✅ 若 JSON 已提供人工/地形节点，则用真实节点替换演示节点
+      const model = window.__model || null;
+      const hasRealSceneNodes = !!(model && Array.isArray(model.nodes) && model.nodes.some(n=>{
+        const t = String(n.nodeType || n.type || "").toLowerCase();
+        return t && t !== "weather";
+      }));
+
+      if (hasRealSceneNodes){
+        renderSceneNodesFromModel(model);
+        return; // 不再创建演示节点
+      }
+
+      // ✅ 没有真实节点：才考虑演示节点（可通过开关关闭）
+    if (window.__ENABLE_DEMO_NODES === true) {
+  renderDemoNodes(map);
+}
+
+
+      const total = routeLatLngs.length;
+      if (total === 0) return;
+const idxArray = [];
+      idxArray.push(0);
+      idxArray.push(Math.floor(total * 0.25));
+      idxArray.push(Math.floor(total * 0.5));
+      idxArray.push(Math.floor(total * 0.75));
+      idxArray.push(total - 1);
+
+      const nameArray = ["起点","途中观景点","中段高点","下坡入口","终点"];
+      const used = new Set();
+
+      idxArray.forEach(function(rawIdx, i){
+        let idx = Math.max(0, Math.min(total - 1, rawIdx));
+        if (used.has(idx)) return;
+        used.add(idx);
+
+        const latlng = routeLatLngs[idx];
+        const name   = nameArray[i] || ("节点 " + (i + 1));
+
+        const icon = L.divIcon({
+          className: "poi-marker",
+          html: `<div class="poi-label">${name}</div>`,
+          iconSize: null,
+          iconAnchor: [16, 34]
+        });
+
+        const marker = L.marker(latlng, { icon });
+        sceneNodeMarkers.push(marker);
+
+        marker.on("click", function(){
+          const el = marker.getElement();
+          if (!el) return;
+          const label = el.querySelector(".poi-label");
+          if (!label) return;
+
+          const isActive = label.classList.contains("poi-label--active");
+          if (isActive){
+            clearSceneNodeSelection();
+            return;
+          }
+
+          clearSceneNodeSelection();
+          label.classList.add("poi-label--active");
+          setDrawerHandleSceneActive(true);
+        });
+
+        marker.addTo(sceneNodeLayer);
+      });
+    }
+
+    if (btnNodeToggle){
+      let sceneNodesVisible = false;
+      btnNodeToggle.addEventListener("click", function(){
+        if (!sceneNodeLayer){
+          buildSceneNodeLayerIfNeeded();
+        }
+        sceneNodesVisible = !sceneNodesVisible;
+        btnNodeToggle.classList.toggle("active", sceneNodesVisible);
+
+        if (sceneNodesVisible && sceneNodeLayer){
+          sceneNodeLayer.addTo(map);
+        } else if (sceneNodeLayer){
+          map.removeLayer(sceneNodeLayer);
+          clearSceneNodeSelection();
+        }
+      });
+    }
+
+        /* 初始化 */
+initBaseMap();
+
+// 尝试使用 JSON 路线
+const usedJson = await tryRenderRouteFromJson();
+
+if (!usedJson) {
+  // JSON 不可用 → 回退 GPX
+  console.log("➡️ 回退到 GPX 线路");
+  initRouteFromGpx();
+} else {
+  console.log("✅ 已使用 JSON 线路，跳过 GPX");
+}
+
+
+  })();
+  console.log("🔥 JS END");
+</script>
+
+<!-- =========================================================
+     HikingEngine · 独立抽屉渲染引擎（不干扰原系统）
+     说明：
+     - 只写 #dynamicDrawerContent
+     - 只读 session.json（支持多路径尝试）
+     - 2 秒刷新一次
+========================================================== -->
+<script id="hiking-engine">
+(function(){
+  "use strict";
+
+  // 1) 轻量 CSS 修正：确保抽屉关闭箭头居中（不影响其它布局）
+  try{
+    var style = document.createElement("style");
+    style.textContent = `
+      #sceneDrawerPanel .scene-drawer-header{display:flex; justify-content:center; align-items:center;}
+      #sceneDrawerPanel .scene-drawer-header-center{margin:0 auto; display:flex; justify-content:center; align-items:center;}
+      #sceneDrawerPanel .scene-drawer-header-button{margin:0 auto;}
+    `;
+    document.head.appendChild(style);
+  }catch(e){}
+
+  var LOG_PREFIX = "HikingEngine";
+  var containerId = "__drawerStatsHidden";
+
+  // session.json 可能存在的相对路径（按优先级尝试）
+  var CANDIDATE_URLS = [
+    "session.json",
+    "./session.json",
+    "../session.json",
+    "data/session.json",
+    "assets/session.json"
+  ];
+
+  function fmtHMS(totalSec){
+    totalSec = Math.max(0, Math.floor(Number(totalSec)||0));
+    var h = Math.floor(totalSec / 3600);
+    var m = Math.floor((totalSec % 3600) / 60);
+    var s = totalSec % 60;
+    if (h > 0) return h + ":" + String(m).padStart(2,"0") + ":" + String(s).padStart(2,"0");
+    return m + ":" + String(s).padStart(2,"0");
+  }
+
+  function calculate(data){
+    // session.json v1.1：timeline + summary
+    if (!data) return null;
+    var tl = data.timeline || {};
+    var sum = data.summary || {};
+
+    var elapsedSec = Number(tl.elapsedSec || 0);
+    var distanceKm = Number(sum.distanceKm || tl.distanceKm || 0);
+
+    // speed km/h
+    var speed = (elapsedSec > 0)
+      ? (distanceKm / (elapsedSec / 3600))
+      : 0;
+
+    // pace min'sec"
+    var pace = "--'--\"";
+    if (distanceKm > 0.005 && elapsedSec > 0){
+      var totalMin = (elapsedSec / 60) / distanceKm;
+      var mm = Math.floor(totalMin);
+      var ss = Math.round((totalMin - mm) * 60);
+      if (ss === 60){ mm += 1; ss = 0; }
+      pace = mm + "'" + String(ss).padStart(2,"0") + '"';
+    }
+
+    return {
+      pace: pace,
+      speedKmh: (Number.isFinite(speed) ? speed : 0),
+      distKm: (Number.isFinite(distanceKm) ? distanceKm : 0),
+      elapsedSec: elapsedSec,
+      state: String(tl.state || "")
+    };
+  }
+
+  function render(stats){
+    var el = document.getElementById(containerId);
+    if (!el) return;
+
+    // stats 为空也要渲染（彻底覆盖“等待行走数据...”）
+    var pace = (stats && stats.pace) ? stats.pace : "--'--\"";
+    var speed = (stats && Number.isFinite(stats.speedKmh)) ? stats.speedKmh.toFixed(1) : "0.0";
+    var dist  = (stats && Number.isFinite(stats.distKm)) ? stats.distKm.toFixed(2) : "0.00";
+    var used  = (stats && Number.isFinite(stats.elapsedSec)) ? fmtHMS(stats.elapsedSec) : "--:--";
+    var state = (stats && stats.state) ? stats.state : "PREPARE";
+
+    el.innerHTML =
+      '<div style="padding:24px 16px; color:#fff; text-align:center;">' +
+        '<div style="font-size:13px; opacity:.6; margin-bottom:8px;">当前平均配速</div>' +
+        '<div style="font-size:52px; font-weight:800; font-variant-numeric:tabular-nums; letter-spacing:-1px;">' + pace + '</div>' +
+        '<div style="display:flex; justify-content:space-around; margin-top:28px; padding-top:18px; border-top:1px solid rgba(255,255,255,.15);">' +
+          '<div>' +
+            '<div style="font-size:12px; opacity:.5;">时速</div>' +
+            '<div style="font-size:20px; font-weight:600;">' + speed + ' <small style="font-size:12px;">km/h</small></div>' +
+          '</div>' +
+          '<div>' +
+            '<div style="font-size:12px; opacity:.5;">累计里程</div>' +
+            '<div style="font-size:20px; font-weight:600;">' + dist + ' <small style="font-size:12px;">km</small></div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="margin-top:14px; font-size:12px; opacity:.45;">用时 ' + used + ' · 状态 ' + state + '</div>' +
+      '</div>';
+  }
+
+  async function fetchFirstOk(){
+    for (var i=0;i<CANDIDATE_URLS.length;i++){
+      var url = CANDIDATE_URLS[i] + "?t=" + Date.now();
+      try{
+        var res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) continue;
+        var data = await res.json();
+        return { data: data, url: CANDIDATE_URLS[i] };
+      }catch(e){
+        // continue
+      }
+    }
+    return null;
+  }
+
+  var inited = false;
+  async function tick(){
+    // DOM 尚未准备时，先渲染一次占位，避免用户看到“等待...”长期不变
+    if (!inited){
+      render(null);
+      inited = true;
+      console.log("🔥", LOG_PREFIX, "LOADED");
+    }
+
+    var result = await fetchFirstOk();
+    if (!result){
+      // 没找到 session.json：保持占位 UI，不刷控制台
+      return;
+    }
+
+    var stats = calculate(result.data);
+    render(stats);
+  }
+
+  // 2 秒一次
+  setInterval(tick, 2000);
+
+  // 首次尽快刷新一次
+  if (document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", function(){ tick(); });
+  } else {
+    tick();
+  }
+})();
+</script>
+<!-- DEBUG: force load scene_state.js -->
+<script>
+  console.log(">>> about to load scene_state.js");
+</script>
+
+<script src="./scene_state.js"></script>
+
+<script>
+  console.log(">>> after load scene_state.js", window.SceneState);
+</script>
+
+
+
+<script>
+(function(){
+  /* ========= 配置 ========= */
+  const DRAWER_ID = "sceneDrawerPanel";
+  const OPEN_CLASS = "open";
+  const OPEN_BTN_ID = "drawerOpenButton";
+  const CLOSE_BAR_ID = "sceneDrawerCloseBar";
+
+  /* ========= 工具 ========= */
+  function $(id){ return document.getElementById(id); }
+  function getDrawer(){ return $(DRAWER_ID); }
+  function getHeader(){
+    const d = getDrawer();
+    if (!d) return null;
+    // 只取“抽屉内部”的那个 header（避开你页面上其他 9 处同名）
+    return d.querySelector(":scope > .scene-drawer-header") || d.querySelector(".scene-drawer-header");
+  }
+  function isOpen(){
+    const d = getDrawer();
+    return !!(d && d.classList.contains(OPEN_CLASS));
+  }
+
+  function openDrawer(){
+    const d = getDrawer();
+    if (!d) return;
+    if (!d.classList.contains(OPEN_CLASS)){
+      if (typeof window.setDrawerHeightMode === "function"){
+        try{ window.setDrawerHeightMode("small"); }catch(e){}
+      }
+      d.classList.add(OPEN_CLASS);
+    }
+  }
+
+  function closeDrawer(){
+    const d = getDrawer();
+    if (!d) return;
+    if (d.classList.contains(OPEN_CLASS)){
+      d.classList.remove(OPEN_CLASS);
+      if (typeof window.setDrawerHeightMode === "function"){
+        try{ window.setDrawerHeightMode("small"); }catch(e){}
+      }
+    }
+  }
+
+  /* ========= A) 强制 header 毛玻璃底板可见（把原背景打穿） ========= */
+  function ensureHeaderBase(){
+    const header = getHeader();
+    if (!header || header.dataset.baseAdded) return;
+    header.dataset.baseAdded = "1";
+
+    header.style.position = "relative";
+    header.style.zIndex = "2";
+    // 关键：把原 header 背景“打穿”，否则 ::before 看不见
+    header.style.setProperty("background","transparent","important");
+    header.style.setProperty("box-shadow","none","important");
+
+    const style = document.createElement("style");
+    style.textContent = `
+      /* header 毛玻璃 */
+      #${DRAWER_ID} > .scene-drawer-header::before{
+        content:"";
+        position:absolute;
+        inset:0;
+        background:rgba(20,20,20,0.52);
+        backdrop-filter:blur(16px);
+        -webkit-backdrop-filter:blur(16px);
+        border-top-left-radius:14px;
+        border-top-right-radius:14px;
+        z-index:0;
+        pointer-events:none;
+      }
+      #${DRAWER_ID} > .scene-drawer-header > *{
+        position:relative;
+        z-index:1;
+      }
+
+      /* 关闭三角的“点按小底板”（只给三角附近一点暗色） */
+      #${CLOSE_BAR_ID} .closebar-hit{
+        position:absolute;
+        left:50%;
+        top:45%;
+        transform:translate(-50%,-50%);
+        width:54px;
+        height:26px;
+        border-radius:10px;
+        background:rgba(20,20,20,0.52);
+        backdrop-filter:blur(16px);
+        -webkit-backdrop-filter:blur(14px);
+        box-shadow:0 6px 16px rgba(0,0,0,0.18);
+        pointer-events:auto;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+/* ========= E) 抽屉整体毛玻璃底板（不吃手势） ========= */
+function ensureDrawerBase(){
+  const d = getDrawer();
+  if (!d || d.dataset.baseAdded) return;
+  d.dataset.baseAdded = "1";
+
+  // 把原 panel 背景打穿
+  d.style.setProperty("background","transparent","important");
+
+  const style = document.createElement("style");
+  style.textContent = `
+    #sceneDrawerPanel::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:rgba(20,20,30,0.60);
+      backdrop-filter:blur(18px);
+      -webkit-backdrop-filter:blur(18px);
+      border-top-left-radius:16px;
+      border-top-right-radius:16px;
+      z-index:0;
+      pointer-events:none;
+    }
+    #sceneDrawerPanel > *{
+      position:relative;
+      z-index:1;
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+  /* ========= B) 关闭栏：不吃手势，只留三角能点（并给三角一个半透明底板） ========= */
+  function ensureCloseBar(){
+    const d = getDrawer();
+    if (!d) return;
+
+    let bar = $(CLOSE_BAR_ID);
+    if (!bar){
+      bar = document.createElement("div");
+      bar.id = CLOSE_BAR_ID;
+
+      // closebar-hit 是半透明底板（只在三角周围）
+      bar.innerHTML = `
+        <div class="closebar-hit"></div>
+        <div class="closebar-arrow"></div>
+      `;
+
+      d.insertBefore(bar, d.firstChild);
+
+      Object.assign(bar.style,{
+        position:"absolute",
+        left:"0",
+        top:"0",
+        width:"100%",
+        height:"36px",
+        zIndex:"3",
+        background:"transparent",
+        pointerEvents:"none" // ⭐ 放行拖拽/轻扫给原 header
+      });
+
+      const hit = bar.querySelector(".closebar-hit");
+      const arrow = bar.querySelector(".closebar-arrow");
+
+      Object.assign(arrow.style,{
+        position:"absolute",
+        left:"50%",
+        top:"50%",
+        transform:"translate(-50%,-40%)",
+        width:"0",
+        height:"0",
+        borderLeft:"7px solid transparent",
+        borderRight:"7px solid transparent",
+        borderTop:"9px solid #fff",
+        opacity:"0.95",
+        pointerEvents:"none" // 让点击落到 hit 上
+      });
+
+      // 只点“三角附近底板”才关闭
+      hit.addEventListener("click", function(e){
+        e.stopPropagation();
+        closeDrawer();
+        syncOpenBtn();
+      }, true);
+    }
+  }
+
+  /* ========= C) 把两组数字找回来（如果之前被挪走了，就塞回 header） ========= */
+  function ensureTwoNumbers(){
+    const header = getHeader();
+    const d = getDrawer();
+    if (!header || !d) return;
+
+    const leftId  = "sceneSpeedDisplay";
+    const rightId = "sceneTimeDeviation";
+
+    // 这俩是你原结构里的“真节点”
+    let left  = document.getElementById(leftId);
+    let right = document.getElementById(rightId);
+
+    // 如果它们不在 header 里，就把它们移动回 header（而不是 clone）
+    if (left && !header.contains(left)){
+      // 确保 header 里有 left 容器位（没有就插最前）
+      const leftSlot = header.querySelector(".scene-drawer-header-left");
+      if (leftSlot && leftSlot !== left){
+        leftSlot.replaceWith(left);
+      }else{
+        header.insertBefore(left, header.firstChild);
+      }
+    }
+
+    if (right && !header.contains(right)){
+      const rightSlot = header.querySelector(".scene-drawer-header-right");
+      if (rightSlot && rightSlot !== right){
+        rightSlot.replaceWith(right);
+      }else{
+        header.appendChild(right);
+      }
+    }
+
+    // 把中间丑按钮隐藏掉（保留 DOM 不动逻辑）
+    const center = header.querySelector(".scene-drawer-header-center");
+    if (center) center.style.display = "none";
+  }
+
+  /* ========= D) 打开按钮 ========= */
+  function ensureOpenBtn(){
+    let btn = $(OPEN_BTN_ID);
+    if (!btn){
+      btn = document.createElement("div");
+      btn.id = OPEN_BTN_ID;
+      btn.innerHTML = `
+        <div style="
+          width:0;height:0;
+          border-left:8px solid transparent;
+          border-right:8px solid transparent;
+          border-bottom:10px solid #fff;
+          pointer-events:none;
+          opacity:.95;
+        "></div>
+      `;
+      Object.assign(btn.style,{
+        position:"fixed",
+        left:"50%",
+        bottom:"60px",
+        transform:"translateX(-50%)",
+        width:"88px",
+        height:"30px",
+        borderRadius:"15px",
+        background:"rgba(35,35,35,.75)",
+        backdropFilter:"blur(10px)",
+        WebkitBackdropFilter:"blur(10px)",
+        display:"flex",
+        alignItems:"center",
+        justifyContent:"center",
+        zIndex:999999,
+        cursor:"pointer"
+      });
+      document.body.appendChild(btn);
+    }
+
+    if (!btn.dataset.bound){
+      btn.addEventListener("click", function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        openDrawer();
+        syncOpenBtn();
+      }, true);
+      btn.dataset.bound = "1";
+    }
+  }
+
+  function syncOpenBtn(){
+    const btn = $(OPEN_BTN_ID);
+    if (!btn) return;
+    btn.style.display = isOpen() ? "none" : "flex";
+  }
+
+  function keepAlive(){
+      ensureDrawerBase(); 
+    ensureHeaderBase();
+    ensureCloseBar();
+    ensureTwoNumbers();
+    ensureOpenBtn();
+    syncOpenBtn();
+  }
+
+  setTimeout(keepAlive,50);
+  setTimeout(keepAlive,300);
+  setTimeout(keepAlive,800);
+
+  const mo = new MutationObserver(keepAlive);
+  mo.observe(document.documentElement,{childList:true,subtree:true});
+  setInterval(keepAlive,400);
+})();
+</script>
+
+
+</body>
+</html>

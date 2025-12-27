@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>节点场景 · 跟我走 Hiking With Me</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    html,body{
+      margin:0;padding:0;height:100%;
+      overflow:hidden;
+      font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+      background:#f4f4f5;color:#111827;
+    }
+    body{display:flex;flex-direction:column;}
+    .page{
+      height:100dvh;
+      max-height:100dvh;
+      width:100%;
+      margin:0 auto;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      padding-bottom:28px; /* 预留底部播放器空间 */
+    }
+    header{
+      flex:0 0 auto;
+      height:56px;
+      padding:0 10px;
+      display:flex;align-items:center;
+      background:#111827;color:#f9fafb;
+    }
+    header .back{
+      width:34px;height:34px;border-radius:17px;border:1px solid #e5e7eb;
+      display:flex;align-items:center;justify-content:center;
+      margin-right:8px;font-size:18px;
+      flex:0 0 auto;
+    }
+    header .titles{
+      display:flex;flex-direction:column;overflow:hidden;
+      flex:1 1 auto;
+      min-width:0;
+    }
+    header .titles .main{font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    header .titles .sub{font-size:12px;color:#d1d5db;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .lock-btn{
+      width:32px;height:32px;margin-left:6px;
+      border-radius:16px;
+      border:none;
+      background:#374151;
+      display:flex;align-items:center;justify-content:center;
+      color:#facc15;
+      font-size:18px;
+      flex:0 0 auto;
+    }
+
+    .content{
+      flex:1 1 auto;
+      display:flex;
+      flex-direction:column;
+      padding:6px 8px 8px;
+      overflow:hidden;
+    }
+
+    /* 顶部节点导航条（替代分类标签） */
+    .node-nav{
+      flex:0 0 auto;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:4px 2px 6px;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+    }
+    .node-nav::-webkit-scrollbar{display:none;}
+    .node-chip{
+      flex:0 0 auto;
+      border-radius:16px;
+      border:1px solid #9ca3af;
+      padding:6px 12px;
+      font-size:13px;
+      background:#111827;
+      color:#e5e7eb;
+      white-space:nowrap;
+    }
+    .node-chip.active{
+      background:#c42020;
+      border-color:#c42020;
+      color:#fff;
+    }
+    .node-chip.locked{
+      opacity:0.4;
+    }
+
+    .main-row{
+      flex:1 1 auto;
+      display:flex;
+      overflow:hidden;
+      gap:4px;
+      min-height:0;
+    }
+    .display-panel{
+      flex:3 1 0%;
+      min-width:72%;
+      border-radius:24px;
+      background:#ffffff;
+      box-shadow:0 6px 18px rgba(0,0,0,.06);
+      padding:8px;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .scene-image-wrapper{
+      position:relative;
+      flex:1 1 auto;
+      width:100%;
+      border-radius:8px;
+      overflow:hidden;
+      background:#e5e7eb;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:0;
+    }
+    #cardImage{
+      width:100%;
+      height:100%;
+      object-fit:cover;
+      display:block;
+    }
+    .img-nav{
+      position:absolute;
+      top:50%;
+      transform:translateY(-50%);
+      width:30px;height:30px;
+      border-radius:15px;
+      border:none;
+      background:rgba(0,0,0,.45);
+      color:#f9fafb;
+      font-size:18px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .img-nav.prev{left:8px;}
+    .img-nav.next{right:8px;}
+    .img-counter{
+      position:absolute;
+      bottom:6px;right:8px;
+      padding:3px 7px;
+      border-radius:999px;
+      background:rgba(0,0,0,.65);
+      color:#f9fafb;
+      font-size:11px;
+    }
+
+    /* 素材统计条：段落 / 音频 / 图片 */
+    .meta-bar{
+      flex:0 0 auto;
+      margin-top:4px;
+      margin-bottom:2px;
+      display:flex;
+      align-items:center;
+      gap:14px;
+      font-size:10px;       /* 字体 10px */
+      color:#111827;
+    }
+    .meta-item{
+      display:flex;
+      align-items:center;
+      gap:4px;
+    }
+    .meta-icon{
+      width:10px;            /* 图标 10px */
+      height:10px;
+      border-radius:3px;
+      border:1px solid #111827;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:10px;
+    }
+    .meta-icon-page::before{content:"▢";}
+    .meta-icon-audio::before{content:"♪";}
+    .meta-icon-image::before{content:"▦";}
+
+    .scene-list{
+      flex:1 1 0%;
+      max-width:28%;
+      overflow-y:auto;
+      padding-left:2px;
+      padding-bottom:72px;
+      min-width:0;
+    }
+
+    /* 右侧卡片单元：APP 图标风格 */
+    .card-btn{
+      width:100%;
+      border-radius:14px;
+      border:1px solid #d1d5db;
+      background:#fff;
+      padding:8px;
+      font-size:14px;
+      color:#111;
+      margin-bottom:4px;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:flex-start;
+      text-align:left;
+    }
+    .card-btn-title{
+      font-weight:600;
+      margin-bottom:2px;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      line-height:1.3;
+    }
+    .card-btn-cat{
+      font-size:11px;
+      color:#6b7280;
+      margin-bottom:2px;
+    }
+    .card-btn-desc{
+      font-size:12px;
+      color:#4b5563;
+      display:-webkit-box;
+      -webkit-line-clamp:2;
+      -webkit-box-orient:vertical;
+      overflow:hidden;
+      line-height:1.3;
+    }
+    .card-btn.active{
+      background:#c42020;
+      color:#fff;
+      border-color:#c42020;
+    }
+    .card-btn.active .card-btn-cat,
+    .card-btn.active .card-btn-desc{
+      color:#f9fafb;
+    }
+    .card-btn.locked{
+      opacity:0.4;
+    }
+
+    /* 音频控制条：底部通栏播放器 */
+    .audio-bar{
+      flex:0 0 auto;
+      margin-top:4px;
+      padding:8px 16px;
+      background:#fff;
+      box-shadow:0 -2px 10px rgba(0,0,0,.12);
+      display:flex;
+      align-items:center;
+      gap:8px;
+
+      position:fixed;
+      left:0;
+      right:0;
+      bottom:0;
+      border-radius:0;
+      z-index:1000;
+    }
+    .audio-btn{
+      width:30px;height:30px;
+      border-radius:15px;border:none;
+      background:#111827;color:#fff;
+      font-size:17px;
+      display:flex;align-items:center;justify-content:center;
+      padding:0;
+      flex:0 0 auto;
+    }
+    .audio-btn.locked{
+      opacity:0.4;
+    }
+    .time-label{
+      font-size:11px;
+      min-width:64px;
+      text-align:center;
+      flex:0 0 auto;
+    }
+    .progress{
+      flex:1 1 auto;
+      height:4px;border-radius:2px;
+      background:#e5e7eb;position:relative;
+      cursor:pointer;
+      min-width:0;
+      transition:opacity .2s;
+    }
+    .progress-inner{
+      position:absolute;left:0;top:0;bottom:0;
+      width:0;background:#c42020;border-radius:2px;
+    }
+    .speed-btn{
+      padding:0 8px;
+      border-radius:14px;
+      border:1px solid #c42020;
+      background:#fff;
+      color:#c42020;
+      font-size:13px;
+      height:28px;
+      flex:0 0 auto;
+    }
+
+    /* 前进 / 后退 10 秒图标样式 */
+    .skip-icon{
+      position:relative;
+      width:22px;
+      height:22px;
+      border-radius:11px;
+      border:2px solid #fff;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:11px;
+    }
+    .skip-number{
+      position:relative;
+      z-index:1;
+    }
+    .skip-arrow{
+      position:absolute;
+      width:16px;
+      height:16px;
+      border-radius:8px;
+      border-top:2px solid #fff;
+      border-right:2px solid #fff;
+      top:-4px;
+    }
+    .skip-arrow.left{
+      left:-2px;
+      transform:rotate(-135deg);
+    }
+    .skip-arrow.right{
+      right:-2px;
+      transform:rotate(45deg);
+    }
+
+    /* 隐藏重播按钮（保留逻辑以防将来再用） */
+    #replayBtn{
+      display:none;
+    }
+
+    input{
+      font-size:16px;
+    }
+  </style>
+
+  <!-- 节点配置 -->
+  <script src="assets/config/node_config.js"></script>
+</head>
+<body>
+<div class="page">
+  <header>
+    <div class="back" onclick="history.back()">‹</div>
+    <div class="titles">
+      <span class="main">节点场景 · Hiking With Me</span>
+      <span class="sub" id="routeSubtitle">当前线路</span>
+    </div>
+    <button class="lock-btn" id="lockBtn" aria-label="解锁编辑">🔓</button>
+  </header>
+
+  <div class="content">
+    <!-- 顶部节点导航条 -->
+    <div class="node-nav" id="nodeNav"></div>
+
+    <div class="main-row">
+      <div class="display-panel">
+
+        <div class="scene-image-wrapper">
+          <img id="cardImage" src="" alt="" />
+          <button class="img-nav prev" id="imgPrev">‹</button>
+          <button class="img-nav next" id="imgNext">›</button>
+          <div class="img-counter" id="imgCounter">0/0</div>
+        </div>
+
+        <!-- 素材统计条 -->
+        <div class="meta-bar" id="metaBar">
+          <div class="meta-item">
+            <div class="meta-icon meta-icon-page"></div>
+            <span id="metaSegment">0/0</span>
+          </div>
+          <div class="meta-item">
+            <div class="meta-icon meta-icon-audio"></div>
+            <span id="metaAudio">0</span>
+          </div>
+          <div class="meta-item">
+            <div class="meta-icon meta-icon-image"></div>
+            <span id="metaImage">0</span>
+          </div>
+        </div>
+
+        <!-- 底部音频控制条（通栏，一行） -->
+        <div class="audio-bar">
+          <button class="audio-btn" id="sectionPrevBtn" aria-label="上一段">⏮</button>
+          <button class="audio-btn" id="playPauseBtn">▶</button>
+          <button class="audio-btn" id="sectionNextBtn" aria-label="下一段">⏭</button>
+
+          <div class="time-label"><span id="currentTime">0:00</span> / <span id="duration">0:00</span></div>
+          <div class="progress" id="progress">
+            <div class="progress-inner" id="progressInner"></div>
+          </div>
+
+          <button class="audio-btn" id="back10Btn" aria-label="后退10秒">
+            <span class="skip-icon">
+              <span class="skip-number">10</span>
+              <span class="skip-arrow left"></span>
+            </span>
+          </button>
+          <button class="audio-btn" id="forward10Btn" aria-label="前进10秒">
+            <span class="skip-icon">
+              <span class="skip-number">10</span>
+              <span class="skip-arrow right"></span>
+            </span>
+          </button>
+
+          <button class="speed-btn" id="speedBtn">1x</button>
+          <button class="audio-btn" id="replayBtn" aria-label="重播当前段落">↻</button>
+        </div>
+      </div>
+
+      <!-- 右侧卡片列表 -->
+      <div class="scene-list" id="cardList"></div>
+    </div>
+  </div>
+</div>
+
+<audio id="nodeAudio" preload="auto"></audio>
+
+<script>
+(function(){
+  // 解析 URL 参数
+  function getQueryParam(name){
+    const m = location.search.match(new RegExp('[?&]'+name+'=([^&]+)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  const cfgAll = window.NODE_PAGE_CONFIG || { routes:{} };
+  const routeIdFromUrl = getQueryParam('route') || 'tongariro';
+  const nodeIdFromUrl  = getQueryParam('node')  || null;
+
+  const routeCfg = cfgAll.routes[routeIdFromUrl] || Object.values(cfgAll.routes)[0] || {
+    name:"未命名路线",
+    nodes:[],
+    cardsByNode:{}
+  };
+
+  const audio = document.getElementById('nodeAudio');
+
+  const routeSubtitle     = document.getElementById('routeSubtitle');
+  const nodeNav           = document.getElementById('nodeNav');
+  const cardList          = document.getElementById('cardList');
+
+  const cardImage         = document.getElementById('cardImage');
+  const imgPrev           = document.getElementById('imgPrev');
+  const imgNext           = document.getElementById('imgNext');
+  const imgCounter        = document.getElementById('imgCounter');
+
+  const metaBar           = document.getElementById('metaBar');
+  const metaSegmentEl     = document.getElementById('metaSegment');
+  const metaAudioEl       = document.getElementById('metaAudio');
+  const metaImageEl       = document.getElementById('metaImage');
+
+  const sectionPrevBtn    = document.getElementById('sectionPrevBtn');
+  const playPauseBtn      = document.getElementById('playPauseBtn');
+  const sectionNextBtn    = document.getElementById('sectionNextBtn');
+  const back10Btn         = document.getElementById('back10Btn');
+  const forward10Btn      = document.getElementById('forward10Btn');
+  const replayBtn         = document.getElementById('replayBtn');
+  const speedBtn          = document.getElementById('speedBtn');
+  const currentTimeEl     = document.getElementById('currentTime');
+  const durationEl        = document.getElementById('duration');
+  const progress          = document.getElementById('progress');
+  const progressInner     = document.getElementById('progressInner');
+  const lockBtn           = document.getElementById('lockBtn');
+
+  routeSubtitle.textContent = routeCfg.name || '未命名路线';
+
+  const nodes       = routeCfg.nodes || [];
+  const cardsByNode = routeCfg.cardsByNode || {};
+
+  let locked            = false;
+  let currentNodeIndex  = 0;
+  let currentCardIndex  = 0;
+  let currentImageIndex = 0;
+  let currentAudioIndex = 0;
+
+  // 倍速设置：0.8 / 1.0 / 1.2 / 1.5
+  const speeds    = [0.8, 1.0, 1.2, 1.5];
+  let speedIndex  = 1; // 默认 1.0
+
+  // 根据 URL 定位当前节点
+  if (nodes.length){
+    if (nodeIdFromUrl){
+      const idx = nodes.findIndex(n=>n.id===nodeIdFromUrl);
+      if (idx>=0) currentNodeIndex = idx;
+    }
+  }
+
+  function secToMMSS(sec){
+    sec = Math.floor(sec||0);
+    const m = Math.floor(sec/60);
+    const s = sec%60;
+    return m + ':' + (s<10?'0'+s:s);
+  }
+
+  function getCurrentNode(){
+    return nodes[currentNodeIndex] || null;
+  }
+
+  function getCurrentCards(){
+    const node = getCurrentNode();
+    if (!node) return [];
+    return cardsByNode[node.id] || [];
+  }
+
+  function getCurrentCard(){
+    const cards = getCurrentCards();
+    return cards[currentCardIndex] || null;
+  }
+
+  function updateMetaCounts(audioCount, imageCount){
+    const totalSegments = audioCount || imageCount || 0;
+    const currentSegIdx = totalSegments ? (currentAudioIndex + 1) : 0;
+    metaSegmentEl.textContent = totalSegments ? (currentSegIdx + " / " + totalSegments) : "0/0";
+    metaAudioEl.textContent   = audioCount || 0;
+    metaImageEl.textContent   = imageCount || 0;
+    metaBar.style.opacity     = (audioCount || imageCount) ? 1 : 0.3;
+  }
+
+  function resetAudioUI(){
+    progressInner.style.width = "0";
+    currentTimeEl.textContent = "0:00";
+    durationEl.textContent    = "0:00";
+    playPauseBtn.textContent  = "▶";
+  }
+
+  function applyLockState(){
+    const nodeChips = nodeNav.querySelectorAll('.node-chip');
+    nodeChips.forEach(btn=>{
+      btn.disabled = locked;
+      btn.classList.toggle('locked', locked);
+    });
+
+    const cardBtns = cardList.querySelectorAll('.card-btn');
+    cardBtns.forEach(btn=>{
+      btn.disabled = locked;
+      btn.classList.toggle('locked', locked);
+    });
+
+    [imgPrev, imgNext].forEach(btn=>{
+      btn.disabled = locked;
+      btn.style.opacity = locked ? '0.3' : '1';
+    });
+
+    const lockSensitiveBtns = [back10Btn, forward10Btn, replayBtn, sectionPrevBtn, sectionNextBtn];
+    lockSensitiveBtns.forEach(btn=>{
+      btn.disabled = locked;
+      btn.classList.toggle('locked', locked);
+    });
+
+    speedBtn.disabled = locked;
+    speedBtn.classList.toggle('locked', locked);
+    progress.style.opacity = locked ? 0.5 : 1;
+  }
+
+  function renderNodeNav(){
+    nodeNav.innerHTML = "";
+    nodes.forEach((node, idx)=>{
+      const btn = document.createElement('button');
+      btn.className = 'node-chip' + (idx===currentNodeIndex?' active':'');
+      btn.textContent = node.label || ("节点"+(idx+1));
+      btn.addEventListener('click', ()=>{
+        if (locked) return;
+        currentNodeIndex  = idx;
+        currentCardIndex  = 0;
+        currentImageIndex = 0;
+        currentAudioIndex = 0;
+        renderNodeNav();
+        renderCardList();
+        updateNodeAndCard();
+        updateUrlParam();
+      });
+      nodeNav.appendChild(btn);
+    });
+    applyLockState();
+  }
+
+  function renderCardList(){
+    const cards = getCurrentCards();
+    cardList.innerHTML = "";
+
+    cards.forEach((card, idx)=>{
+      const btn = document.createElement('button');
+      btn.className = 'card-btn' + (idx===currentCardIndex?' active':'');
+      btn.dataset.index = idx;
+
+      const title = document.createElement('div');
+      title.className = 'card-btn-title';
+      title.textContent = card.label || "(未命名卡片)";
+
+      const cat = document.createElement('div');
+      cat.className = 'card-btn-cat';
+      cat.textContent = card.category || "";
+
+      const desc = document.createElement('div');
+      desc.className = 'card-btn-desc';
+      desc.textContent = card.description || "";
+
+      btn.appendChild(title);
+      if (card.category) btn.appendChild(cat);
+      if (card.description) btn.appendChild(desc);
+
+      btn.addEventListener('click', ()=>{
+        if (locked) return;
+        currentCardIndex  = idx;
+        currentImageIndex = 0;
+        currentAudioIndex = 0;
+        renderCardList();
+        updateNodeAndCard();
+      });
+
+      cardList.appendChild(btn);
+    });
+
+    applyLockState();
+  }
+
+  function updateImage(){
+    const card = getCurrentCard();
+    const imgs = (card && card.images) ? card.images : [];
+    if (imgs.length){
+      if (currentImageIndex<0) currentImageIndex = imgs.length-1;
+      if (currentImageIndex>=imgs.length) currentImageIndex = 0;
+      const filename = imgs[currentImageIndex];
+      cardImage.src = "assets/images/" + filename;
+      imgCounter.textContent = (currentImageIndex+1) + "/" + imgs.length;
+      imgPrev.style.display = imgs.length>1 ? "flex":"none";
+      imgNext.style.display = imgs.length>1 ? "flex":"none";
+      imgCounter.style.display = "block";
+    }else{
+      cardImage.src = "";
+      imgCounter.textContent = "0/0";
+      imgPrev.style.display = "none";
+      imgNext.style.display = "none";
+    }
+  }
+
+  function updateNodeAndCard(){
+  const card  = getCurrentCard();
+  const cards = getCurrentCards();
+
+  const audioList = (card && card.audios && card.audios.length)
+    ? card.audios
+    : (card && card.audio ? [card.audio] : []);
+  const imgs  = (card && card.images) ? card.images : [];
+
+  const audioCount = audioList.length;
+  const imageCount = imgs.length;
+
+  if (audioCount > 0 && imageCount >= audioCount) {
+    currentImageIndex = Math.min(currentAudioIndex, imageCount - 1);
+  }
+
+  if (!card){
+    cardImage.src = "";
+    imgCounter.textContent = "0/0";
+    imgPrev.style.display = "none";
+    imgNext.style.display = "none";
+    audio.removeAttribute("src");
+    audio.load();
+    resetAudioUI();
+    updateMetaCounts(0,0);
+    return;
+  }
+
+  updateImage();
+  updateMetaCounts(audioList.length, imgs.length);
+
+  if (!audioList.length){
+    audio.removeAttribute("src");
+    audio.load();
+    resetAudioUI();
+    return;
+  }
+
+  if (currentAudioIndex < 0) currentAudioIndex = 0;
+  if (currentAudioIndex >= audioList.length) currentAudioIndex = audioList.length - 1;
+
+  const curFile = audioList[currentAudioIndex];
+  if (curFile){
+    audio.src = "assets/audio/" + curFile;
+    audio.currentTime   = 0;
+    audio.playbackRate  = speeds[speedIndex];
+    audio.play().catch(()=>{});
+    playPauseBtn.textContent = "⏸";
+  }else{
+    audio.removeAttribute("src");
+    audio.load();
+    resetAudioUI();
+  }
+}
+
+
+  function updateUrlParam(){
+    const node = getCurrentNode();
+    if (!node) return;
+    const params = new URLSearchParams(location.search);
+    params.set("route", routeIdFromUrl);
+    params.set("node", node.id);
+    const newUrl = location.pathname + "?" + params.toString();
+    history.replaceState(null, "", newUrl);
+  }
+
+  // 播放 & 控制
+  playPauseBtn.addEventListener('click', ()=>{
+    if (!audio.src){
+      updateNodeAndCard();
+      return;
+    }
+    if (audio.paused){
+      audio.play().catch(()=>{});
+      playPauseBtn.textContent = "⏸";
+    }else{
+      audio.pause();
+      playPauseBtn.textContent = "▶";
+    }
+  });
+
+  sectionPrevBtn.addEventListener('click', ()=>{
+    if (locked) return;
+    const card = getCurrentCard();
+    const audioList = (card && card.audios && card.audios.length)
+      ? card.audios
+      : (card && card.audio ? [card.audio] : []);
+    if (!audioList.length) return;
+    if (currentAudioIndex>0){
+      currentAudioIndex--;
+      updateNodeAndCard();
+    }
+  });
+
+  sectionNextBtn.addEventListener('click', ()=>{
+    if (locked) return;
+    const card = getCurrentCard();
+    const audioList = (card && card.audios && card.audios.length)
+      ? card.audios
+      : (card && card.audio ? [card.audio] : []);
+    if (!audioList.length) return;
+    if (currentAudioIndex<audioList.length-1){
+      currentAudioIndex++;
+      updateNodeAndCard();
+    }
+  });
+
+  back10Btn.addEventListener('click', ()=>{
+    if (locked) return;
+    if (!audio.src) return;
+    const cur = audio.currentTime || 0;
+    audio.currentTime = Math.max(0, cur-10);
+  });
+
+  forward10Btn.addEventListener('click', ()=>{
+    if (locked) return;
+    if (!audio.src) return;
+    const cur = audio.currentTime || 0;
+    const dur = isFinite(audio.duration) ? audio.duration : cur+10;
+    audio.currentTime = Math.min(dur, cur+10);
+  });
+
+  replayBtn.addEventListener('click', ()=>{
+    if (locked) return;
+    if (!audio.src) return;
+    audio.currentTime = 0;
+    audio.play().catch(()=>{});
+    playPauseBtn.textContent = "⏸";
+  });
+
+  speedBtn.addEventListener('click', ()=>{
+    if (locked) return;
+    speedIndex = (speedIndex+1)%speeds.length;
+    audio.playbackRate = speeds[speedIndex];
+    speedBtn.textContent = speeds[speedIndex] + "x";
+  });
+
+  audio.addEventListener('timeupdate', ()=>{
+    currentTimeEl.textContent = secToMMSS(audio.currentTime);
+    durationEl.textContent    = secToMMSS(audio.duration);
+    if (audio.duration>0){
+      const p = (audio.currentTime/audio.duration)*100;
+      progressInner.style.width = p + "%";
+    }else{
+      progressInner.style.width = "0";
+    }
+  });
+
+  audio.addEventListener('ended', ()=>{
+    const card = getCurrentCard();
+    const audioList = (card && card.audios && card.audios.length)
+      ? card.audios
+      : (card && card.audio ? [card.audio] : []);
+    if (audioList.length>1 && currentAudioIndex<audioList.length-1){
+      currentAudioIndex++;
+      updateNodeAndCard();
+    }else{
+      resetAudioUI();
+    }
+  });
+
+  progress.addEventListener('click', (e)=>{
+    if (locked) return;
+    const rect = progress.getBoundingClientRect();
+    const ratio = (e.clientX-rect.left)/rect.width;
+    if (audio.duration>0){
+      audio.currentTime = Math.max(0, Math.min(audio.duration*ratio, audio.duration));
+    }
+  });
+
+  lockBtn.addEventListener('click', ()=>{
+    locked = !locked;
+    lockBtn.style.background = locked ? "#c42020" : "#374151";
+    lockBtn.textContent      = locked ? "🔒" : "🔓";
+    lockBtn.setAttribute("aria-label", locked ? "已锁定（沉浸模式）" : "解锁编辑");
+    applyLockState();
+  });
+
+  imgPrev.addEventListener('click', ()=>{
+    if (locked) return;
+    const card = getCurrentCard();
+    const imgs = (card && card.images) ? card.images : [];
+    if (!imgs.length) return;
+    currentImageIndex--;
+    updateImage();
+  });
+
+  imgNext.addEventListener('click', ()=>{
+    if (locked) return;
+    const card = getCurrentCard();
+    const imgs = (card && card.images) ? card.images : [];
+    if (!imgs.length) return;
+    currentImageIndex++;
+    updateImage();
+  });
+
+  // 初始化
+  renderNodeNav();
+  renderCardList();
+  updateNodeAndCard();
+  applyLockState();
+})();
+</script>
+</body>
+</html>
